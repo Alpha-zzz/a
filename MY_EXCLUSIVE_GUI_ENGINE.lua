@@ -697,87 +697,129 @@ function MyEngine:CreateWindow(Config)
             return Elem
         end
 
-        -- ── スライダー ────────────────────────────────────────
+        -- ── スライダー（Rayfield方式）────────────────────────
         function Tab:CreateSlider(Data)
+            local Min,Max = Data.Range[1],Data.Range[2]
+            local Inc     = Data.Increment or 1
+            local cur     = math.clamp(Data.CurrentValue or Min, Min, Max)
+            local dr      = false
+            local lastFired = nil  -- ドラッグ中は重複Callbackを抑制
+
+            -- カードフレーム
             local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,64); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+            F.Size=UDim2.new(1,0,0,60); F.BackgroundColor3=Color3.fromRGB(20,20,24)
             F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+
+            -- 上段：名前ラベル（左）+ 値ラベル（右）
+            MkLabel(F,{
+                Size=UDim2.new(1,-80,0,28),Position=UDim2.new(0,14,0,0),
+                Text=Data.Name or "スライダー",TextSize=17,Font=Enum.Font.SourceSans,
+                TextColor3=Color3.fromRGB(220,225,240),
+            })
             local VL=MkLabel(F,{
-                Size=UDim2.new(0,60,0,22),Position=UDim2.new(1,-66,0,7),
+                Size=UDim2.new(0,68,0,28),Position=UDim2.new(1,-76,0,0),
                 Text="",TextColor3=Color3.fromRGB(75,135,205),TextSize=15,
                 Font=Enum.Font.GothamSemibold,TextXAlignment=Enum.TextXAlignment.Right,
             })
-            MkLabel(F,{
-                Size=UDim2.new(1,-80,0,22),Position=UDim2.new(0,13,0,7),
-                Text=Data.Name or "スライダー",TextSize=17,Font=Enum.Font.SourceSans,
-            })
 
-            -- トラック本体（見た目専用・高さ6px）
+            -- トラック背景（Trk）── Knobはこの子として ratio で位置決め
             local Trk=Instance.new("Frame")
-            Trk.Size=UDim2.new(1,-24,0,6); Trk.Position=UDim2.new(0,12,1,-22)
-            Trk.BackgroundColor3=Color3.fromRGB(30,30,38); Trk.BorderSizePixel=0
-            Trk.Parent=F; CC(Trk,100)
+            Trk.Size=UDim2.new(1,-28,0,4); Trk.Position=UDim2.new(0,14,1,-14)
+            Trk.BackgroundColor3=Color3.fromRGB(38,38,50)
+            Trk.BorderSizePixel=0; Trk.ZIndex=2; Trk.Parent=F; CC(Trk,100)
+
+            -- 塗り（Fil）── Knob の位置に追随
             local Fil=Instance.new("Frame")
-            Fil.Size=UDim2.new(0,0,1,0); Fil.BackgroundColor3=Color3.fromRGB(42,138,242)
-            Fil.BorderSizePixel=0; Fil.Parent=Trk; CC(Fil,100)
+            Fil.Size=UDim2.new(0,0,1,0)
+            Fil.BackgroundColor3=Color3.fromRGB(42,138,242)
+            Fil.BorderSizePixel=0; Fil.ZIndex=3; Fil.Parent=Trk; CC(Fil,100)
 
-            -- Knob（18px、ドラッグ中は少し大きくなる）
+            -- Knob ── Trkの子、AnchorPoint(0.5,0.5)で ratio×Scale だけ移動
+            -- Filの幅に依存しないので値0でも見切れない
             local Knob=Instance.new("Frame")
-            Knob.Size=UDim2.new(0,18,0,18); Knob.Position=UDim2.new(1,-9,0.5,-9)
-            Knob.BackgroundColor3=Color3.fromRGB(255,255,255); Knob.BorderSizePixel=0
-            Knob.ZIndex=3; Knob.Parent=Fil; CC(Knob,100)
-            CS(Knob,Color3.fromRGB(100,160,255),1.5)
+            Knob.Size=UDim2.new(0,16,0,16)
+            Knob.AnchorPoint=Vector2.new(0.5,0.5)
+            Knob.Position=UDim2.new(0,0,0.5,0)   -- 初期は左端、Updで更新
+            Knob.BackgroundColor3=Color3.fromRGB(255,255,255)
+            Knob.BorderSizePixel=0; Knob.ZIndex=5; Knob.Parent=Trk; CC(Knob,100)
+            CS(Knob,Color3.fromRGB(80,140,240),1.5)
 
-            -- 透明な当たり判定ゾーン（高さ28px、トラックを中心に上下に広い）
-            local HitZone=Instance.new("TextButton")
-            HitZone.Size=UDim2.new(1,-24,0,28); HitZone.Position=UDim2.new(0,12,1,-35)
-            HitZone.BackgroundTransparency=1; HitZone.Text=""
-            HitZone.AutoButtonColor=false; HitZone.ZIndex=4; HitZone.Parent=F
+            -- 当たり判定ゾーン（カード全体を覆う透明ボタン）
+            local Hit=Instance.new("TextButton")
+            Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1
+            Hit.Text=""; Hit.AutoButtonColor=false; Hit.ZIndex=10; Hit.Parent=F
 
-            local Min,Max=Data.Range[1],Data.Range[2]
-            local Inc=Data.Increment or 1; local cur=Data.CurrentValue or Min; local dr=false
-            local function Upd(v)
-                v=math.clamp(math.floor(v/Inc+0.5)*Inc,Min,Max); cur=v
-                Fil.Size=UDim2.new((v-Min)/(Max-Min),0,1,0)
-                VL.Text=tostring(v)..(Data.Suffix or "")
-                if Data.Callback then pcall(Data.Callback,v) end
-                MyEngine.Flags[Data.Flag or Data.Name or ""]=v
+            -- ── Upd：見た目更新 + Callback（値変化時のみ）
+            local function Upd(v, fireCallback)
+                v = math.clamp(math.floor(v/Inc+0.5)*Inc, Min, Max)
+                if v == cur and not fireCallback then return end
+                cur = v
+                local ratio = (Max==Min) and 0 or (v-Min)/(Max-Min)
+                -- Knobをtrkのscale座標で動かす
+                Knob.Position = UDim2.new(ratio,0,0.5,0)
+                -- Filはratio×100%の幅
+                Fil.Size = UDim2.new(ratio,0,1,0)
+                VL.Text = tostring(v)..(Data.Suffix or "")
+                MyEngine.Flags[Data.Flag or Data.Name or ""] = v
+                -- ドラッグ中は最後の値だけCallbackを呼ぶ（抑制）
+                lastFired = v
             end
-            Upd(cur)
+            Upd(cur, true)  -- 初期表示（Callbackは呼ばない）
 
-            -- ドラッグ開始：HitZone全体から受け付ける
-            HitZone.InputBegan:Connect(function(i)
-                if i.UserInputType==Enum.UserInputType.MouseButton1 then
-                    dr=true
-                    TW(Knob,{Size=UDim2.new(0,22,0,22),Position=UDim2.new(1,-11,0.5,-11)},0.1)
-                    -- クリックした位置に即ジャンプ
-                    local mx=UserInputService:GetMouseLocation().X
-                    Upd(Min+(Max-Min)*math.clamp((mx-Trk.AbsolutePosition.X)/Trk.AbsoluteSize.X,0,1))
+            -- ── マウスX → ratio 変換
+            local function MouseRatio()
+                local ax = Trk.AbsolutePosition.X
+                local aw = Trk.AbsoluteSize.X
+                if aw <= 0 then return 0 end
+                return math.clamp((UserInputService:GetMouseLocation().X - ax) / aw, 0, 1)
+            end
+
+            -- ドラッグ開始 & クリック即ジャンプ
+            Hit.InputBegan:Connect(function(i)
+                if i.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+                dr = true
+                Upd(Min+(Max-Min)*MouseRatio(), false)
+                -- ドラッグ中：Knobを少し大きく
+                Knob.Size = UDim2.new(0,20,0,20)
+                Fil.BackgroundColor3 = Color3.fromRGB(60,155,255)
+            end)
+
+            -- ドラッグ中（UserInputService経由で確実に取れる）
+            UserInputService.InputChanged:Connect(function(i)
+                if dr and i.UserInputType==Enum.UserInputType.MouseMovement then
+                    Upd(Min+(Max-Min)*MouseRatio(), false)
                 end
             end)
+
+            -- ドラッグ終了 → Callbackを1回だけ呼ぶ
             UserInputService.InputEnded:Connect(function(i)
                 if i.UserInputType==Enum.UserInputType.MouseButton1 and dr then
-                    dr=false
-                    TW(Knob,{Size=UDim2.new(0,18,0,18),Position=UDim2.new(1,-9,0.5,-9)},0.1)
+                    dr = false
+                    Knob.Size = UDim2.new(0,16,0,16)
+                    Fil.BackgroundColor3 = Color3.fromRGB(42,138,242)
+                    -- 離したときだけCallbackを発火
+                    if Data.Callback then pcall(Data.Callback, cur) end
+                    AddLog((Data.Name or "スライダー").." = "..tostring(cur),"Action")
                 end
             end)
 
-            -- ホバー時にKnobを少し光らせる
-            HitZone.MouseEnter:Connect(function()
-                TW(Knob,{BackgroundColor3=Color3.fromRGB(220,235,255)},0.1)
+            -- ホバー
+            Hit.MouseEnter:Connect(function()
+                TW(Knob,{BackgroundColor3=Color3.fromRGB(210,230,255)},0.1)
+                TW(Trk,{BackgroundColor3=Color3.fromRGB(44,44,58)},0.1)
             end)
-            HitZone.MouseLeave:Connect(function()
-                if not dr then TW(Knob,{BackgroundColor3=Color3.fromRGB(255,255,255)},0.1) end
-            end)
-
-            RunService.RenderStepped:Connect(function()
-                if dr then
-                    local mx=UserInputService:GetMouseLocation().X
-                    Upd(Min+(Max-Min)*math.clamp((mx-Trk.AbsolutePosition.X)/Trk.AbsoluteSize.X,0,1))
+            Hit.MouseLeave:Connect(function()
+                if not dr then
+                    TW(Knob,{BackgroundColor3=Color3.fromRGB(255,255,255)},0.1)
+                    TW(Trk,{BackgroundColor3=Color3.fromRGB(38,38,50)},0.1)
                 end
             end)
+
             local Elem={}
-            function Elem:Set(v) Upd(v) end
+            function Elem:Set(v)
+                Upd(v, true)
+                if Data.Callback then pcall(Data.Callback, cur) end
+            end
             function Elem:Get() return cur end
             return Elem
         end
