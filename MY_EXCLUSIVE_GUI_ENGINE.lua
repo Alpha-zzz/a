@@ -67,41 +67,23 @@ local function TypeWrite(label, text, speed)
 end
 
 -- ================================================================
---  マウス管理
+--  マウス管理（Rayfield方式 - アイコン表示のみ制御）
+--  MouseBehavior には触らない → ゲームのマウスロックを壊さない
 -- ================================================================
 local MouseManager = {}
-local _overConn = nil
-local _hoverCount = 0
 
-function MouseManager.StartOverride()
+function MouseManager.ShowCursor()
     UserInputService.MouseIconEnabled = true
-    if _overConn then return end
-    _overConn = RunService.RenderStepped:Connect(function()
-        if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
-            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-        end
-    end)
 end
 
-function MouseManager.StopOverride()
-    if _overConn then _overConn:Disconnect(); _overConn = nil end
+function MouseManager.HideCursor()
+    UserInputService.MouseIconEnabled = false
 end
 
-function MouseManager.BindFrame(frame)
-    frame.MouseEnter:Connect(function()
-        _hoverCount = _hoverCount + 1
-        MouseManager.StartOverride()
-    end)
-    frame.MouseLeave:Connect(function()
-        _hoverCount = math.max(0, _hoverCount - 1)
-        if _hoverCount <= 0 then
-            _hoverCount = 0
-            if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-                MouseManager.StopOverride()
-            end
-        end
-    end)
-end
+-- 互換スタブ（既存の呼び出し箇所をそのまま動かすため残す）
+function MouseManager.StartOverride() end
+function MouseManager.StopOverride()  end
+function MouseManager.BindFrame(_)    end
 
 -- ================================================================
 --  エンジン本体
@@ -388,11 +370,15 @@ function MyEngine:CreateWindow(Config)
     local SG=Instance.new("ScreenGui")
     SG.Name="afHub_"..HttpService:GenerateGUID()
     SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+    SG.DisplayOrder=100          -- 他のGUIより必ず手前に表示
     SG.ResetOnSpawn=false
     pcall(function() SG.IgnoreGuiInset=true end)
     SG.Parent=LocalPlayer:WaitForChild("PlayerGui")
 
-    PlayBoot(SG,function() AddLog("GUI起動完了","Success") end)
+    PlayBoot(SG,function()
+        AddLog("GUI起動完了","Success")
+        MouseManager.ShowCursor()
+    end)
 
     local Main=Instance.new("Frame")
     Main.Name="Main"; Main.Size=UDim2.new(0,820,0,520)
@@ -492,6 +478,7 @@ function MyEngine:CreateWindow(Config)
         if busy then return end; isOpen=v
         if v then
             busy=true; Main.Visible=true
+            MouseManager.ShowCursor()
             Main.Size=UDim2.new(0,785,0,498); Main.BackgroundTransparency=1
             TW(Main,{Size=UDim2.new(0,820,0,520),BackgroundTransparency=0},
                 0.38,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
@@ -502,7 +489,7 @@ function MyEngine:CreateWindow(Config)
                 0.3,Enum.EasingStyle.Quint,Enum.EasingDirection.In)
             t.Completed:Connect(function()
                 Main.Visible=false; Main.Size=UDim2.new(0,820,0,520)
-                MouseManager.StopOverride(); busy=false
+                MouseManager.StopOverride(); MouseManager.HideCursor(); busy=false
             end)
         end
     end
@@ -517,6 +504,7 @@ function MyEngine:CreateWindow(Config)
                 Mini.Visible=true; Mini.BackgroundTransparency=1; Mini.Size=UDim2.new(0,38,0,38)
                 TW(Mini,{BackgroundTransparency=0,Size=UDim2.new(0,50,0,50)},
                     0.3,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+                MouseManager.HideCursor()
                 busy=false
             end)
         else
@@ -525,6 +513,7 @@ function MyEngine:CreateWindow(Config)
             task.delay(0.2,function()
                 Mini.Visible=false; Mini.Size=UDim2.new(0,50,0,50)
                 Main.Visible=true; Main.Size=UDim2.new(0,785,0,498); Main.BackgroundTransparency=1
+                MouseManager.ShowCursor()
                 TW(Main,{Size=UDim2.new(0,820,0,520),BackgroundTransparency=0},
                     0.38,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
                 task.delay(0.38,function() busy=false end)
@@ -1445,6 +1434,7 @@ end
 function MyEngine:Notify(Data)
     local NG=Instance.new("ScreenGui")
     NG.Name="afNotify"; NG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+    NG.DisplayOrder=101          -- メインGUIより更に手前
     pcall(function() NG.IgnoreGuiInset=true end)
     NG.Parent=LocalPlayer:WaitForChild("PlayerGui")
     local NF=Instance.new("Frame")
