@@ -1,4 +1,4 @@
-\--[[
+--[[
     俺専用GUI ENGINE - ULTIMATE
     Rayfield互換・最高にモダン・最強のカスタムUI
     
@@ -86,14 +86,14 @@ function MyEngine:CreateWindow(Config)
     ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
     
     -- メインフレーム
-    local Main = Instance.new("CanvasGroup")
+    local Main = Instance.new("Frame")
     Main.Name = "Main"
     Main.Size = UDim2.new(0, 0, 0, 0)
     Main.AnchorPoint = Vector2.new(0.5, 0.5)
     Main.Position = UDim2.new(0.5, 0, 0.5, 0)
     Main.BackgroundColor3 = Color3.fromRGB(15, 15, 17)
     Main.BorderSizePixel = 0
-    Main.GroupAlpha = 0
+    Main.BackgroundTransparency = 1
     Main.Parent = ScreenGui
     CreateCorner(Main, 12)
     CreateStroke(Main, Color3.fromRGB(45, 45, 50), 2)
@@ -186,7 +186,6 @@ function MyEngine:CreateWindow(Config)
     AccountName.TextSize = 13
     AccountName.Font = Enum.Font.GothamSemibold
     AccountName.TextXAlignment = Enum.TextXAlignment.Left
-    AccountName.TextTruncate = Enum.TextTruncate.AtEnd
     AccountName.Parent = AccountSection
     
     -- オンライン表示
@@ -221,7 +220,7 @@ function MyEngine:CreateWindow(Config)
     task.spawn(function()
         Tween(Main, {Size = UDim2.new(0, 800, 0, 500)}, 0.8, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
         task.wait(0.1)
-        Tween(Main, {GroupAlpha = 1}, 0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        Tween(Main, {BackgroundTransparency = 0}, 0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
         AddLog("GUI起動完了", "Success")
     end)
     
@@ -647,7 +646,6 @@ function MyEngine:CreateWindow(Config)
                 NameLabel.TextSize = 14
                 NameLabel.Font = Enum.Font.GothamSemibold
                 NameLabel.TextXAlignment = Enum.TextXAlignment.Left
-                NameLabel.TextTruncate = Enum.TextTruncate.AtEnd
                 NameLabel.Parent = InfoContainer
                 
                 local IdLabel = Instance.new("TextLabel")
