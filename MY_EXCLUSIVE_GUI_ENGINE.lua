@@ -1179,7 +1179,7 @@ function MyEngine:CreateWindow(Config)
                 Outer.ClipsDescendants = true
                 Outer.Parent = container
                 CC(Outer, 8)
-                CS(Outer, Color3.fromRGB(38, 50, 75), 1.5)
+                local outerStroke = CS(Outer, Color3.fromRGB(38, 50, 75), 1.5)
 
                 -- ヘッダーグラデーション
                 local HdrGrad = Instance.new("UIGradient")
@@ -1288,14 +1288,14 @@ function MyEngine:CreateWindow(Config)
                         TW(AccLine, {BackgroundColor3 = Color3.fromRGB(95, 195, 255)}, 0.15)
                         TW(Outer, {Size = UDim2.new(1, 0, 0, getFullH())},
                             0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-                        TW(CS(Outer, Color3.fromRGB(55, 130, 225), 1.5), {}, 0)
+                        TW(outerStroke, {Color = Color3.fromRGB(55, 130, 225)}, 0.15)
                     else
                         -- 折りたたみ
                         Arrow.Text = "▶"
                         TW(AccLine, {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.15)
                         TW(Outer, {Size = UDim2.new(1, 0, 0, HEADER_H)},
                             0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-                        TW(CS(Outer, Color3.fromRGB(38, 50, 75), 1.5), {}, 0)
+                        TW(outerStroke, {Color = Color3.fromRGB(38, 50, 75)}, 0.15)
                     end
                 end)
 
@@ -1511,6 +1511,7 @@ function MyEngine:CreateWindow(Config)
                         TextXAlignment=Enum.TextXAlignment.Center,
                         TextTransparency=1,  -- 未選択時は非表示
                     })
+                    CheckLbl.Name = "_CheckMark"  -- 名前で確実に識別できるようにする
 
                     -- 既に選択中なら即時ビジュアル適用
                     if selectedTable[player.Name] then
@@ -1644,13 +1645,8 @@ function MyEngine:CreateWindow(Config)
                                 s.Thickness = 1.5
                             end
                             TW(c, {BackgroundColor3=Color3.fromRGB(20,20,26)}, 0.15)
-                            local chk = c:FindFirstChild("TextLabel") -- ✓ラベルを探して非表示
-                            -- ✓ はインデックス順で最後のTextLabelなので FindFirstChildWhichIsA で安全に探す
-                            for _, lbl in pairs(c:GetDescendants()) do
-                                if lbl:IsA("TextLabel") and lbl.Text == "✓" then
-                                    TW(lbl, {TextTransparency=1}, 0.15)
-                                end
-                            end
+                            local chk = c:FindFirstChild("_CheckMark")
+                            if chk then TW(chk, {TextTransparency=1}, 0.15) end
                         end
                     end
                     UpdateCountLbl()
@@ -1667,11 +1663,8 @@ function MyEngine:CreateWindow(Config)
                     if c then
                         local s = c:FindFirstChildOfClass("UIStroke")
                         if s then ApplyCardVisual(c, s, true) end
-                        for _, lbl in pairs(c:GetDescendants()) do
-                            if lbl:IsA("TextLabel") and lbl.Text == "✓" then
-                                TW(lbl, {TextTransparency=0}, 0.15)
-                            end
-                        end
+                        local chk = c:FindFirstChild("_CheckMark")
+                        if chk then TW(chk, {TextTransparency=0}, 0.15) end
                     end
                     UpdateCountLbl()
                     if Data.Callback then pcall(Data.Callback, player, true, selectedTable) end
@@ -1687,11 +1680,8 @@ function MyEngine:CreateWindow(Config)
                     if c then
                         local s = c:FindFirstChildOfClass("UIStroke")
                         if s then ApplyCardVisual(c, s, false) end
-                        for _, lbl in pairs(c:GetDescendants()) do
-                            if lbl:IsA("TextLabel") and lbl.Text == "✓" then
-                                TW(lbl, {TextTransparency=1}, 0.15)
-                            end
-                        end
+                        local chk = c:FindFirstChild("_CheckMark")
+                        if chk then TW(chk, {TextTransparency=1}, 0.15) end
                     end
                     UpdateCountLbl()
                     if Data.Callback then pcall(Data.Callback, player, false, selectedTable) end
