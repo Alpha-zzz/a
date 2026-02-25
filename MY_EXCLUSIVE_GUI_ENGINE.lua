@@ -3,6 +3,7 @@
 -- V3.2: CreateTextInput + CreateColorPicker + :Set()メソッド + CreateLogViewer
 -- V3.2 PATCH: PlayerList / LogViewer / GameInfo に折りたたみ機能追加
 -- V3.3: CreateCollapsibleSection 追加（セクション単位での折りたたみ対応）
+-- V3.3 PATCH: CreatePlayerList をテーブル式マルチ選択に変更（複数人同時選択対応）
 
 local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
@@ -1395,11 +1396,35 @@ function MyEngine:CreateWindow(Config)
             end
 
             -- ================================================================
-            --  プレイヤーリスト ── 折りたたみ対応
+            --  プレイヤーリスト ── テーブル式マルチ選択 ── 折りたたみ対応
+            --
+            --  【V3.3 PATCH】selectedTable を導入し、何人でも同時選択可能に変更。
+            --
+            --  selectedTable の構造:
+            --    selectedTable[player.Name] = true   ← 選択中
+            --    selectedTable[player.Name] = nil    ← 未選択
+            --
+            --  コールバック署名（後方互換 + テーブル追加）:
+            --    Data.Callback(player, isSelected, selectedTable)
+            --      player       : 操作対象の Player オブジェクト
+            --      isSelected   : true=追加 / false=解除
+            --      selectedTable: 現在選択中の全プレイヤーテーブル（読み取り専用として扱うこと）
+            --
+            --  戻り値 Elem の API:
+            --    Elem:GetSelected()          → selectedTable のシャローコピーを返す
+            --    Elem:IsSelected(player)     → bool（そのプレイヤーが選択中か）
+            --    Elem:ClearAll()             → 全選択を解除し UI を更新
+            --    Elem:SelectPlayer(player)   → 指定プレイヤーを選択状態にする
+            --    Elem:DeselectPlayer(player) → 指定プレイヤーを選択解除する
             -- ================================================================
             function Creators:CreatePlayerList(Data)
                 local FULL_H   = 420
                 local HEADER_H = 48
+
+                -- ── テーブル式マルチ選択の核心 ──────────────────────
+                -- キー: player.Name (string)、値: true
+                -- 空テーブル = 誰も選択していない
+                local selectedTable = {}
 
                 local F=Instance.new("Frame")
                 F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
@@ -1411,6 +1436,23 @@ function MyEngine:CreateWindow(Config)
                     TextColor3=Color3.fromRGB(255,255,255),
                 })
 
+                -- 選択人数バッジ（右上）
+                local CountLbl = MkLabel(F, {
+                    Size=UDim2.new(0,80,0,20), Position=UDim2.new(1,-122,0,14),
+                    Text="選択: 0人", TextSize=13, Font=Enum.Font.GothamSemibold,
+                    TextColor3=Color3.fromRGB(70,150,255),
+                    TextXAlignment=Enum.TextXAlignment.Right,
+                })
+
+                local function UpdateCountLbl()
+                    local n = 0
+                    for _ in pairs(selectedTable) do n = n + 1 end
+                    CountLbl.Text = "選択: " .. n .. "人"
+                    CountLbl.TextColor3 = n > 0
+                        and Color3.fromRGB(70, 195, 100)
+                        or  Color3.fromRGB(70, 100, 150)
+                end
+
                 MakeCollapsible(F, FULL_H, HEADER_H)
 
                 local SB=Instance.new("TextBox")
@@ -1420,6 +1462,7 @@ function MyEngine:CreateWindow(Config)
                 SB.PlaceholderColor3=Color3.fromRGB(75,80,95); SB.Text=""
                 SB.TextColor3=Color3.fromRGB(255,255,255); SB.TextSize=16
                 SB.Font=Enum.Font.SourceSans; SB.ClearTextOnFocus=false; SB.Parent=F; CC(SB,6)
+
                 local PS=Instance.new("ScrollingFrame")
                 PS.Size=UDim2.new(1,-16,1,-88); PS.Position=UDim2.new(0,8,0,82)
                 PS.BackgroundTransparency=1; PS.BorderSizePixel=0
@@ -1428,6 +1471,20 @@ function MyEngine:CreateWindow(Config)
                 PL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     PS.CanvasSize=UDim2.new(0,0,0,PL.AbsoluteContentSize.Y+8)
                 end)
+
+                -- カードの選択/解除ビジュアルを適用する内部関数
+                local function ApplyCardVisual(Card, Stk, isSelected)
+                    if isSelected then
+                        TW(Stk, {Color=Color3.fromRGB(55,180,100)}, 0.2)
+                        Stk.Thickness = 2
+                        TW(Card, {BackgroundColor3=Color3.fromRGB(14,26,16)}, 0.2)
+                    else
+                        TW(Stk, {Color=Color3.fromRGB(36,36,46)}, 0.2)
+                        Stk.Thickness = 1.5
+                        TW(Card, {BackgroundColor3=Color3.fromRGB(20,20,26)}, 0.2)
+                    end
+                end
+
                 local function MkCard(player)
                     if PS:FindFirstChild("p_"..player.UserId) then return end
                     local Card=Instance.new("Frame")
@@ -1445,32 +1502,66 @@ function MyEngine:CreateWindow(Config)
                     MkLabel(Card,{Size=UDim2.new(1,-66,0,17),Position=UDim2.new(0,58,0.60,0),
                         Text="@"..player.Name,TextSize=14,Font=Enum.Font.SourceSans,
                         TextColor3=Color3.fromRGB(65,125,195)})
+
+                    -- チェックマークアイコン（選択時に表示）
+                    local CheckLbl = MkLabel(Card, {
+                        Size=UDim2.new(0,22,0,22), Position=UDim2.new(1,-28,0.5,-11),
+                        Text="✓", TextSize=16, Font=Enum.Font.GothamBold,
+                        TextColor3=Color3.fromRGB(55,210,100),
+                        TextXAlignment=Enum.TextXAlignment.Center,
+                        TextTransparency=1,  -- 未選択時は非表示
+                    })
+
+                    -- 既に選択中なら即時ビジュアル適用
+                    if selectedTable[player.Name] then
+                        Card.BackgroundColor3 = Color3.fromRGB(14,26,16)
+                        Stk.Color = Color3.fromRGB(55,180,100)
+                        Stk.Thickness = 2
+                        CheckLbl.TextTransparency = 0
+                    end
+
                     local Hit=Instance.new("TextButton")
                     Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1; Hit.Text=""; Hit.Parent=Card
+
                     Hit.MouseEnter:Connect(function()
-                        if not MyEngine.KillList[player.UserId] then
-                            TW(Card,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.1) end
+                        if not selectedTable[player.Name] then
+                            TW(Card,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.1)
+                        end
                     end)
                     Hit.MouseLeave:Connect(function()
-                        if not MyEngine.KillList[player.UserId] then
-                            TW(Card,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.1) end
+                        if not selectedTable[player.Name] then
+                            TW(Card,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.1)
+                        end
                     end)
+
                     Hit.MouseButton1Click:Connect(function()
-                        if not MyEngine.KillList[player.UserId] then
-                            MyEngine.KillList[player.UserId]=true; MyEngine.Blacklist[player.UserId]=player.Name
-                            TW(Stk,{Color=Color3.fromRGB(210,48,48)},0.2); Stk.Thickness=2
-                            TW(Card,{BackgroundColor3=Color3.fromRGB(28,16,16)},0.2)
-                            AddLog("キルリスト追加: "..player.Name,"Action")
-                            if Data.Callback then pcall(Data.Callback,player,true) end
+                        -- テーブルへの追加/削除トグル
+                        if not selectedTable[player.Name] then
+                            -- ── 選択追加 ──
+                            selectedTable[player.Name] = true
+                            MyEngine.KillList[player.UserId] = true
+                            MyEngine.Blacklist[player.UserId] = player.Name
+                            ApplyCardVisual(Card, Stk, true)
+                            TW(CheckLbl, {TextTransparency=0}, 0.15)
+                            UpdateCountLbl()
+                            AddLog("選択追加: "..player.Name.." (計"..
+                                (function() local n=0; for _ in pairs(selectedTable) do n=n+1 end; return n end)()
+                                .."人)","Action")
+                            if Data.Callback then pcall(Data.Callback, player, true, selectedTable) end
                         else
-                            MyEngine.KillList[player.UserId]=nil; MyEngine.Blacklist[player.UserId]=nil
-                            TW(Stk,{Color=Color3.fromRGB(36,36,46)},0.2); Stk.Thickness=1.5
-                            TW(Card,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.2)
-                            AddLog("キルリスト解除: "..player.Name,"Action")
-                            if Data.Callback then pcall(Data.Callback,player,false) end
+                            -- ── 選択解除 ──
+                            selectedTable[player.Name] = nil
+                            MyEngine.KillList[player.UserId] = nil
+                            MyEngine.Blacklist[player.UserId] = nil
+                            ApplyCardVisual(Card, Stk, false)
+                            TW(CheckLbl, {TextTransparency=1}, 0.15)
+                            UpdateCountLbl()
+                            AddLog("選択解除: "..player.Name,"Action")
+                            if Data.Callback then pcall(Data.Callback, player, false, selectedTable) end
                         end
                     end)
                 end
+
                 local function Refresh()
                     for _,c in pairs(PS:GetChildren()) do
                         if c:IsA("Frame") then
@@ -1482,6 +1573,7 @@ function MyEngine:CreateWindow(Config)
                         if p~=LocalPlayer then MkCard(p) end
                     end
                 end
+
                 SB:GetPropertyChangedSignal("Text"):Connect(function()
                     local s=SB.Text:lower()
                     for _,c in pairs(PS:GetChildren()) do
@@ -1495,21 +1587,117 @@ function MyEngine:CreateWindow(Config)
                         end
                     end
                 end)
+
                 Players.PlayerAdded:Connect(function(p)
                     task.wait(0.5); Refresh()
-                    if MyEngine.Blacklist[p.UserId] then
-                        AddLog("ターゲット再参加: "..p.Name,"Warning")
-                        MyEngine.KillList[p.UserId]=true; task.wait(0.5); Refresh()
-                        local c=PS:FindFirstChild("p_"..p.UserId)
+                    -- 既に選択テーブルに入っていたプレイヤーが戻ってきた場合
+                    if selectedTable[p.Name] then
+                        AddLog("選択済みプレイヤー再参加: "..p.Name,"Warning")
+                        MyEngine.KillList[p.UserId] = true
+                        task.wait(0.5); Refresh()
+                        -- カードのビジュアルを復元
+                        local c = PS:FindFirstChild("p_"..p.UserId)
                         if c then
-                            local s=c:FindFirstChildOfClass("UIStroke")
-                            if s then s.Color=Color3.fromRGB(210,48,48); s.Thickness=2 end
-                            TW(c,{BackgroundColor3=Color3.fromRGB(28,16,16)},0.2)
+                            local s = c:FindFirstChildOfClass("UIStroke")
+                            if s then s.Color=Color3.fromRGB(55,180,100); s.Thickness=2 end
+                            c.BackgroundColor3 = Color3.fromRGB(14,26,16)
                         end
                     end
                 end)
                 Players.PlayerRemoving:Connect(function() task.wait(0.5); Refresh() end)
+
                 Refresh()
+                UpdateCountLbl()
+
+                -- ================================================================
+                --  戻り値: Elem（マルチ選択テーブルを外部から操作するための API）
+                -- ================================================================
+                local Elem = {}
+
+                -- 現在選択中の全プレイヤーをテーブルで返す（シャローコピー）
+                -- 戻り値: { [playerName] = true, ... }
+                function Elem:GetSelected()
+                    local copy = {}
+                    for k, v in pairs(selectedTable) do copy[k] = v end
+                    return copy
+                end
+
+                -- 指定プレイヤーが選択中か判定
+                function Elem:IsSelected(player)
+                    return selectedTable[player.Name] == true
+                end
+
+                -- 全選択を解除し UI を更新
+                function Elem:ClearAll()
+                    for name, _ in pairs(selectedTable) do
+                        selectedTable[name] = nil
+                    end
+                    -- KillList / Blacklist も連動してクリア
+                    MyEngine.KillList = {}
+                    MyEngine.Blacklist = {}
+                    -- 全カードのビジュアルをリセット
+                    for _, c in pairs(PS:GetChildren()) do
+                        if c:IsA("Frame") then
+                            local s = c:FindFirstChildOfClass("UIStroke")
+                            if s then
+                                s.Color = Color3.fromRGB(36,36,46)
+                                s.Thickness = 1.5
+                            end
+                            TW(c, {BackgroundColor3=Color3.fromRGB(20,20,26)}, 0.15)
+                            local chk = c:FindFirstChild("TextLabel") -- ✓ラベルを探して非表示
+                            -- ✓ はインデックス順で最後のTextLabelなので FindFirstChildWhichIsA で安全に探す
+                            for _, lbl in pairs(c:GetDescendants()) do
+                                if lbl:IsA("TextLabel") and lbl.Text == "✓" then
+                                    TW(lbl, {TextTransparency=1}, 0.15)
+                                end
+                            end
+                        end
+                    end
+                    UpdateCountLbl()
+                    AddLog("全選択を解除しました","Action")
+                end
+
+                -- 指定プレイヤーをプログラムから選択状態にする
+                function Elem:SelectPlayer(player)
+                    if not player or selectedTable[player.Name] then return end
+                    selectedTable[player.Name] = true
+                    MyEngine.KillList[player.UserId] = true
+                    MyEngine.Blacklist[player.UserId] = player.Name
+                    local c = PS:FindFirstChild("p_"..player.UserId)
+                    if c then
+                        local s = c:FindFirstChildOfClass("UIStroke")
+                        if s then ApplyCardVisual(c, s, true) end
+                        for _, lbl in pairs(c:GetDescendants()) do
+                            if lbl:IsA("TextLabel") and lbl.Text == "✓" then
+                                TW(lbl, {TextTransparency=0}, 0.15)
+                            end
+                        end
+                    end
+                    UpdateCountLbl()
+                    if Data.Callback then pcall(Data.Callback, player, true, selectedTable) end
+                end
+
+                -- 指定プレイヤーをプログラムから選択解除する
+                function Elem:DeselectPlayer(player)
+                    if not player or not selectedTable[player.Name] then return end
+                    selectedTable[player.Name] = nil
+                    MyEngine.KillList[player.UserId] = nil
+                    MyEngine.Blacklist[player.UserId] = nil
+                    local c = PS:FindFirstChild("p_"..player.UserId)
+                    if c then
+                        local s = c:FindFirstChildOfClass("UIStroke")
+                        if s then ApplyCardVisual(c, s, false) end
+                        for _, lbl in pairs(c:GetDescendants()) do
+                            if lbl:IsA("TextLabel") and lbl.Text == "✓" then
+                                TW(lbl, {TextTransparency=1}, 0.15)
+                            end
+                        end
+                    end
+                    UpdateCountLbl()
+                    if Data.Callback then pcall(Data.Callback, player, false, selectedTable) end
+                end
+
+                return Elem
             end
 
             -- ================================================================
@@ -1626,6 +1814,12 @@ end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v3.3 起動完了 | トグルキー: "..tostring(MyEngine.ToggleKey))
-print("[af_hub] v3.3 新機能: CreateCollapsibleSection() でセクション折りたたみが使えます")
+print("[af_hub] v3.3 PATCH 起動完了 | トグルキー: "..tostring(MyEngine.ToggleKey))
+print("[af_hub] v3.3 PATCH: CreatePlayerList がテーブル式マルチ選択に対応しました")
+print("[af_hub] 使い方: local list = Tab:CreatePlayerList({...})")
+print("[af_hub]   list:GetSelected()          → 選択中テーブル { [name]=true }")
+print("[af_hub]   list:IsSelected(player)     → bool")
+print("[af_hub]   list:ClearAll()             → 全解除")
+print("[af_hub]   list:SelectPlayer(player)   → プログラムから選択")
+print("[af_hub]   list:DeselectPlayer(player) → プログラムから解除")
 return MyEngine
