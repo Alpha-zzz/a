@@ -51,21 +51,26 @@ local function Tween(obj, props, dur, style, dir)
 end
 
 -- ================================================================
---  マウス管理（一人称視点対応）
+--  マウス管理（一人称視点対応 - Rayfield方式）
 -- ================================================================
 local MouseManager = {}
+local _mouseOverride = nil
+
 function MouseManager.Lock()
-    -- Robloxの一人称マウスロックを解除してGUI操作を可能にする
-    local cam = workspace.CurrentCamera
-    if cam then
-        -- CameraType を固定しない（設定は元に戻す）
-    end
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
     UserInputService.MouseIconEnabled = true
+    if _mouseOverride then return end
+    _mouseOverride = RunService.RenderStepped:Connect(function()
+        if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        end
+    end)
 end
+
 function MouseManager.Restore()
-    -- 元の操作に戻す（マウスロックシフトがあればそちらに委ねる）
-    -- ゲーム側のカメラスクリプトが再度ロックするので何もしなくてOK
+    if _mouseOverride then
+        _mouseOverride:Disconnect()
+        _mouseOverride = nil
+    end
 end
 
 local function GetTime()
@@ -319,7 +324,8 @@ function MyEngine:CreateWindow(Config)
     --  起動アニメーション実行（メインGUIはその後表示）
     -- ================================================================
     PlayBootAnimation(ScreenGui, function()
-        AddLog("GUI起動完了", "Success")
+        AddLog("GUI boot complete", "Success")
+        MouseManager.Lock()
     end)
 
     -- ================================================================
@@ -496,10 +502,10 @@ function MyEngine:CreateWindow(Config)
     AccountName.Size                = UDim2.new(1, -70, 0, 25)
     AccountName.Position            = UDim2.new(0, 65, 0.2, 0)
     AccountName.BackgroundTransparency = 1
-    AccountName.Text                = LocalPlayer.Name
+    AccountName.Text                = LocalPlayer.DisplayName
     AccountName.TextColor3          = Color3.fromRGB(255, 255, 255)
     AccountName.TextSize            = 13
-    AccountName.Font                = Enum.Font.GothamSemibold
+    AccountName.Font                = Enum.Font.SourceSansBold
     AccountName.TextXAlignment      = Enum.TextXAlignment.Left
     AccountName.Parent = AccountSection
 
@@ -537,53 +543,92 @@ function MyEngine:CreateWindow(Config)
     -- ================================================================
     local isOpen       = true
     local isMinimized  = false
+    local _animating   = false  -- アニメーション中の二重起動防止
 
+    -- GUIを開く・閉じる（滑らかなスケール+フェード）
     local function SetOpen(open)
+        if _animating then return end
         isOpen = open
         if open then
+            _animating = true
             MouseManager.Lock()
             Main.Visible = true
-            Tween(Main, {BackgroundTransparency = 0}, 0.3)
-            AddLog("GUIを開きました", "Info")
+            Main.Size    = UDim2.new(0, 760, 0, 480)
+            Main.BackgroundTransparency = 1
+            Tween(Main, {
+                Size = UDim2.new(0, 820, 0, 520),
+                BackgroundTransparency = 0
+            }, 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            task.delay(0.35, function() _animating = false end)
+            AddLog("GUI opened", "Info")
         else
-            Tween(Main, {BackgroundTransparency = 1}, 0.3)
-            task.wait(0.3)
-            Main.Visible = false
-            MouseManager.Restore()
-            AddLog("GUIを閉じました", "Info")
+            _animating = true
+            local t = Tween(Main, {
+                Size = UDim2.new(0, 780, 0, 490),
+                BackgroundTransparency = 1
+            }, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            t.Completed:Connect(function()
+                Main.Visible = false
+                Main.Size = UDim2.new(0, 820, 0, 520)
+                MouseManager.Restore()
+                _animating = false
+            end)
+            AddLog("GUI closed", "Info")
         end
     end
 
+    -- 最小化（ミニアイコン化）
     local function SetMinimized(minimize)
+        if _animating then return end
         isMinimized = minimize
+        _animating = true
         if minimize then
-            -- メインを縮小アニメーション
-            Tween(Main, {Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1}, 0.3)
-            task.wait(0.25)
-            Main.Visible = false
-            -- ミニアイコン表示
-            MiniIcon.Visible = true
-            MiniIcon.Position = UDim2.new(0.05, 0, 0.05, 0)
-            MiniIcon.BackgroundTransparency = 1
-            Tween(MiniIcon, {BackgroundTransparency = 0}, 0.3)
-            AddLog("最小化しました", "Info")
+            -- メインをフェードアウト＆縮小
+            Tween(Main, {
+                Size = UDim2.new(0, 60, 0, 60),
+                BackgroundTransparency = 1
+            }, 0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            task.delay(0.4, function()
+                Main.Visible = false
+                Main.Size = UDim2.new(0, 820, 0, 520)
+                -- ミニアイコンをフェードイン
+                MiniIcon.Visible = true
+                MiniIcon.BackgroundTransparency = 1
+                MiniIcon.Size = UDim2.new(0, 40, 0, 40)
+                Tween(MiniIcon, {
+                    BackgroundTransparency = 0,
+                    Size = UDim2.new(0, 50, 0, 50)
+                }, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                _animating = false
+            end)
+            AddLog("Minimized", "Info")
         else
-            -- ミニアイコン非表示
-            Tween(MiniIcon, {BackgroundTransparency = 1}, 0.2)
-            task.wait(0.2)
-            MiniIcon.Visible = false
-            -- メインを展開アニメーション
-            Main.Visible = true
-            Main.Size = UDim2.new(0, 0, 0, 0)
-            Tween(Main, {Size = UDim2.new(0, 820, 0, 520), BackgroundTransparency = 0}, 0.4)
-            AddLog("展開しました", "Info")
+            -- ミニアイコンをフェードアウト
+            Tween(MiniIcon, {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0, 40, 0, 40)
+            }, 0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            task.delay(0.2, function()
+                MiniIcon.Visible = false
+                MiniIcon.Size = UDim2.new(0, 50, 0, 50)
+                -- メインをフェードイン＆拡大
+                Main.Visible = true
+                Main.Size    = UDim2.new(0, 760, 0, 480)
+                Main.BackgroundTransparency = 1
+                Tween(Main, {
+                    Size = UDim2.new(0, 820, 0, 520),
+                    BackgroundTransparency = 0
+                }, 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                task.delay(0.4, function() _animating = false end)
+            end)
+            AddLog("Restored", "Info")
         end
     end
 
     -- Kキーで開閉
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        -- gameProcessedを無視してチャット中以外なら作動
         if input.KeyCode == Enum.KeyCode.K then
+            if _animating then return end
             if isMinimized then
                 SetMinimized(false)
             else
@@ -1008,10 +1053,10 @@ function MyEngine:CreateWindow(Config)
                 NameLabel.Size               = UDim2.new(1, -10, 0, 25)
                 NameLabel.Position           = UDim2.new(0, 0, 0.15, 0)
                 NameLabel.BackgroundTransparency = 1
-                NameLabel.Text               = player.Name
+                NameLabel.Text               = player.DisplayName
                 NameLabel.TextColor3         = Color3.fromRGB(255, 255, 255)
-                NameLabel.TextSize           = 14
-                NameLabel.Font               = Enum.Font.GothamSemibold
+                NameLabel.TextSize           = 16
+                NameLabel.Font               = Enum.Font.SourceSansBold
                 NameLabel.TextXAlignment     = Enum.TextXAlignment.Left
                 NameLabel.Parent = InfoContainer
 
@@ -1019,10 +1064,10 @@ function MyEngine:CreateWindow(Config)
                 IdLabel.Size               = UDim2.new(1, -10, 0, 18)
                 IdLabel.Position           = UDim2.new(0, 0, 0.6, 0)
                 IdLabel.BackgroundTransparency = 1
-                IdLabel.Text               = "ID: " .. player.UserId
-                IdLabel.TextColor3         = Color3.fromRGB(120, 120, 125)
-                IdLabel.TextSize           = 11
-                IdLabel.Font               = Enum.Font.Gotham
+                IdLabel.Text               = "@" .. player.Name
+                IdLabel.TextColor3         = Color3.fromRGB(80, 140, 210)
+                IdLabel.TextSize           = 12
+                IdLabel.Font               = Enum.Font.SourceSans
                 IdLabel.TextXAlignment     = Enum.TextXAlignment.Left
                 IdLabel.Parent = InfoContainer
 
