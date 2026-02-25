@@ -697,128 +697,114 @@ function MyEngine:CreateWindow(Config)
             return Elem
         end
 
-        -- ── スライダー（Rayfield方式）────────────────────────
+        -- ── スライダー（Rayfield完全準拠）────────────────────
         function Tab:CreateSlider(Data)
-            local Min,Max = Data.Range[1],Data.Range[2]
-            local Inc     = Data.Increment or 1
-            local cur     = math.clamp(Data.CurrentValue or Min, Min, Max)
-            local dr      = false
-            local lastFired = nil  -- ドラッグ中は重複Callbackを抑制
+            local Min = Data.Range[1]; local Max = Data.Range[2]
+            local Inc = Data.Increment or 1
+            local cur = math.clamp(Data.CurrentValue or Min, Min, Max)
+            local dr  = false
 
-            -- カードフレーム
+            -- ── カード（Rayfieldと同じ高さ54px）
             local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,60); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+            F.Size=UDim2.new(1,0,0,54); F.BackgroundColor3=Color3.fromRGB(20,20,24)
             F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
 
-            -- 上段：名前ラベル（左）+ 値ラベル（右）
+            -- 名前ラベル（左上）
             MkLabel(F,{
-                Size=UDim2.new(1,-80,0,28),Position=UDim2.new(0,14,0,0),
+                Size=UDim2.new(1,-90,0,30),Position=UDim2.new(0,14,0,0),
                 Text=Data.Name or "スライダー",TextSize=17,Font=Enum.Font.SourceSans,
                 TextColor3=Color3.fromRGB(220,225,240),
             })
+
+            -- 値ラベル（右上） ── Rayfieldと同じ青色
             local VL=MkLabel(F,{
-                Size=UDim2.new(0,68,0,28),Position=UDim2.new(1,-76,0,0),
-                Text="",TextColor3=Color3.fromRGB(75,135,205),TextSize=15,
+                Size=UDim2.new(0,72,0,30),Position=UDim2.new(1,-80,0,0),
+                Text="",TextColor3=Color3.fromRGB(50,138,220),TextSize=15,
                 Font=Enum.Font.GothamSemibold,TextXAlignment=Enum.TextXAlignment.Right,
             })
 
-            -- トラック背景（Trk）── Knobはこの子として ratio で位置決め
-            local Trk=Instance.new("Frame")
-            Trk.Size=UDim2.new(1,-28,0,4); Trk.Position=UDim2.new(0,14,1,-14)
-            Trk.BackgroundColor3=Color3.fromRGB(38,38,50)
-            Trk.BorderSizePixel=0; Trk.ZIndex=2; Trk.Parent=F; CC(Trk,100)
+            -- ── トラックコンテナ（SecondaryElementBackground相当）
+            -- Rayfieldはトラックを薄暗い背景フレームで包んでいる
+            local TrkBG=Instance.new("Frame")
+            TrkBG.Size=UDim2.new(1,-28,0,8); TrkBG.Position=UDim2.new(0,14,1,-18)
+            TrkBG.BackgroundColor3=Color3.fromRGB(25,25,30)
+            TrkBG.BorderSizePixel=0; TrkBG.ZIndex=2; TrkBG.Parent=F; CC(TrkBG,100)
+            CS(TrkBG,Color3.fromRGB(40,40,52),1)
 
-            -- 塗り（Fil）── Knob の位置に追随
+            -- ── 進捗バー（SliderProgress相当）── KnobなしでRayfield流
             local Fil=Instance.new("Frame")
             Fil.Size=UDim2.new(0,0,1,0)
-            Fil.BackgroundColor3=Color3.fromRGB(42,138,242)
-            Fil.BorderSizePixel=0; Fil.ZIndex=3; Fil.Parent=Trk; CC(Fil,100)
+            Fil.BackgroundColor3=Color3.fromRGB(50,138,220)
+            Fil.BorderSizePixel=0; Fil.ZIndex=3; Fil.Parent=TrkBG; CC(Fil,100)
+            -- UIStroke でグローエフェクト（SliderStroke相当）
+            local FilStroke=Instance.new("UIStroke")
+            FilStroke.Color=Color3.fromRGB(58,163,255)
+            FilStroke.Thickness=1.2
+            FilStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+            FilStroke.Parent=Fil
 
-            -- Knob ── Trkの子、AnchorPoint(0.5,0.5)で ratio×Scale だけ移動
-            -- Filの幅に依存しないので値0でも見切れない
-            local Knob=Instance.new("Frame")
-            Knob.Size=UDim2.new(0,16,0,16)
-            Knob.AnchorPoint=Vector2.new(0.5,0.5)
-            Knob.Position=UDim2.new(0,0,0.5,0)   -- 初期は左端、Updで更新
-            Knob.BackgroundColor3=Color3.fromRGB(255,255,255)
-            Knob.BorderSizePixel=0; Knob.ZIndex=5; Knob.Parent=Trk; CC(Knob,100)
-            CS(Knob,Color3.fromRGB(80,140,240),1.5)
-
-            -- 当たり判定ゾーン（カード全体を覆う透明ボタン）
+            -- ── 当たり判定：カード全体を透明ボタンで覆う（Rayfieldと同じ）
             local Hit=Instance.new("TextButton")
             Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1
             Hit.Text=""; Hit.AutoButtonColor=false; Hit.ZIndex=10; Hit.Parent=F
 
-            -- ── Upd：見た目更新 + Callback（値変化時のみ）
-            local function Upd(v, fireCallback)
-                v = math.clamp(math.floor(v/Inc+0.5)*Inc, Min, Max)
-                if v == cur and not fireCallback then return end
-                cur = v
-                local ratio = (Max==Min) and 0 or (v-Min)/(Max-Min)
-                -- Knobをtrkのscale座標で動かす
-                Knob.Position = UDim2.new(ratio,0,0.5,0)
-                -- Filはratio×100%の幅
-                Fil.Size = UDim2.new(ratio,0,1,0)
-                VL.Text = tostring(v)..(Data.Suffix or "")
-                MyEngine.Flags[Data.Flag or Data.Name or ""] = v
-                -- ドラッグ中は最後の値だけCallbackを呼ぶ（抑制）
-                lastFired = v
-            end
-            Upd(cur, true)  -- 初期表示（Callbackは呼ばない）
-
-            -- ── マウスX → ratio 変換
+            -- ── ratio 計算（TrkBGの実寸を使う）
             local function MouseRatio()
-                local ax = Trk.AbsolutePosition.X
-                local aw = Trk.AbsoluteSize.X
-                if aw <= 0 then return 0 end
-                return math.clamp((UserInputService:GetMouseLocation().X - ax) / aw, 0, 1)
+                local ax=TrkBG.AbsolutePosition.X; local aw=TrkBG.AbsoluteSize.X
+                if aw<=0 then return 0 end
+                return math.clamp((UserInputService:GetMouseLocation().X-ax)/aw, 0, 1)
             end
+
+            -- ── 値更新（Filの幅だけ動かす・Knobなし）
+            local function Upd(v)
+                v=math.clamp(math.floor(v/Inc+0.5)*Inc, Min, Max); cur=v
+                local ratio=(Max==Min) and 0 or (v-Min)/(Max-Min)
+                Fil.Size=UDim2.new(ratio,0,1,0)
+                VL.Text=tostring(v)..(Data.Suffix or "")
+                MyEngine.Flags[Data.Flag or Data.Name or ""]=v
+            end
+            Upd(cur)  -- 初期表示
 
             -- ドラッグ開始 & クリック即ジャンプ
             Hit.InputBegan:Connect(function(i)
-                if i.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-                dr = true
-                Upd(Min+(Max-Min)*MouseRatio(), false)
-                -- ドラッグ中：Knobを少し大きく
-                Knob.Size = UDim2.new(0,20,0,20)
-                Fil.BackgroundColor3 = Color3.fromRGB(60,155,255)
+                if i.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+                dr=true
+                Upd(Min+(Max-Min)*MouseRatio())
+                -- ドラッグ中：Fillを少し明るく（Rayfieldのフィードバック）
+                TW(Fil,{BackgroundColor3=Color3.fromRGB(65,155,255)},0.1)
+                TW(FilStroke,{Color=Color3.fromRGB(90,185,255)},0.1)
             end)
 
-            -- ドラッグ中（UserInputService経由で確実に取れる）
+            -- ドラッグ中
             UserInputService.InputChanged:Connect(function(i)
                 if dr and i.UserInputType==Enum.UserInputType.MouseMovement then
-                    Upd(Min+(Max-Min)*MouseRatio(), false)
+                    Upd(Min+(Max-Min)*MouseRatio())
                 end
             end)
 
-            -- ドラッグ終了 → Callbackを1回だけ呼ぶ
+            -- ドラッグ終了 → Callbackを1回
             UserInputService.InputEnded:Connect(function(i)
                 if i.UserInputType==Enum.UserInputType.MouseButton1 and dr then
-                    dr = false
-                    Knob.Size = UDim2.new(0,16,0,16)
-                    Fil.BackgroundColor3 = Color3.fromRGB(42,138,242)
-                    -- 離したときだけCallbackを発火
-                    if Data.Callback then pcall(Data.Callback, cur) end
+                    dr=false
+                    TW(Fil,{BackgroundColor3=Color3.fromRGB(50,138,220)},0.15)
+                    TW(FilStroke,{Color=Color3.fromRGB(58,163,255)},0.15)
+                    if Data.Callback then pcall(Data.Callback,cur) end
                     AddLog((Data.Name or "スライダー").." = "..tostring(cur),"Action")
                 end
             end)
 
-            -- ホバー
+            -- ホバー：カード背景をほんの少し明るく（Rayfieldの ElementBackgroundHover）
             Hit.MouseEnter:Connect(function()
-                TW(Knob,{BackgroundColor3=Color3.fromRGB(210,230,255)},0.1)
-                TW(Trk,{BackgroundColor3=Color3.fromRGB(44,44,58)},0.1)
+                TW(F,{BackgroundColor3=Color3.fromRGB(25,25,30)},0.1)
             end)
             Hit.MouseLeave:Connect(function()
-                if not dr then
-                    TW(Knob,{BackgroundColor3=Color3.fromRGB(255,255,255)},0.1)
-                    TW(Trk,{BackgroundColor3=Color3.fromRGB(38,38,50)},0.1)
-                end
+                if not dr then TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.1) end
             end)
 
             local Elem={}
             function Elem:Set(v)
-                Upd(v, true)
-                if Data.Callback then pcall(Data.Callback, cur) end
+                Upd(v)
+                if Data.Callback then pcall(Data.Callback,cur) end
             end
             function Elem:Get() return cur end
             return Elem
