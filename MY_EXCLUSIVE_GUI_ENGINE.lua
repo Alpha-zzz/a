@@ -1,6 +1,6 @@
--- af_hub GUI ENGINE - ULTIMATE V3.1
+-- af_hub GUI ENGINE - ULTIMATE V3.2
 -- Rayfield互換 / 完全日本語 / 一人称視点対応
--- V3.1: アクティブタブRayfield白スタイル + 全体フォントサイズUP
+-- V3.2: CreateTextInput + CreateColorPicker + :Set()メソッド + CreateLogViewer
 
 local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
@@ -111,9 +111,11 @@ local MyEngine = {
     ToggleKey = Enum.KeyCode.K,
 }
 
+local LogListeners = {}  -- LogViewerのリアルタイム更新用
 local function AddLog(msg, t)
     table.insert(MyEngine.Logs, {Message=msg, Type=t or "Info", Time=GetTime()})
     if #MyEngine.Logs > 100 then table.remove(MyEngine.Logs, 1) end
+    for _, cb in pairs(LogListeners) do pcall(cb) end
 end
 
 -- ================================================================
@@ -652,23 +654,36 @@ function MyEngine:CreateWindow(Config)
             Cir.BackgroundColor3=Color3.fromRGB(185,185,200); Cir.BorderSizePixel=0
             Cir.Parent=Trk; CC(Cir,100)
             local val=Data.CurrentValue or false
-            if val then
-                Trk.BackgroundColor3=Color3.fromRGB(42,138,242)
-                Cir.Position=UDim2.new(1,-22,0.5,-10)
+            local function ApplyVisual(v, animate)
+                if v then
+                    if animate then TW(Trk,{BackgroundColor3=Color3.fromRGB(42,138,242)},0.18)
+                                     TW(Cir,{Position=UDim2.new(1,-22,0.5,-10)},0.18)
+                    else Trk.BackgroundColor3=Color3.fromRGB(42,138,242)
+                         Cir.Position=UDim2.new(1,-22,0.5,-10) end
+                else
+                    if animate then TW(Trk,{BackgroundColor3=Color3.fromRGB(36,36,44)},0.18)
+                                     TW(Cir,{Position=UDim2.new(0,2,0.5,-10)},0.18)
+                    else Trk.BackgroundColor3=Color3.fromRGB(36,36,44)
+                         Cir.Position=UDim2.new(0,2,0.5,-10) end
+                end
             end
+            ApplyVisual(val, false)
             Trk.MouseButton1Click:Connect(function()
                 val=not val
-                if val then
-                    TW(Trk,{BackgroundColor3=Color3.fromRGB(42,138,242)},0.18)
-                    TW(Cir,{Position=UDim2.new(1,-22,0.5,-10)},0.18)
-                else
-                    TW(Trk,{BackgroundColor3=Color3.fromRGB(36,36,44)},0.18)
-                    TW(Cir,{Position=UDim2.new(0,2,0.5,-10)},0.18)
-                end
+                ApplyVisual(val, true)
                 if Data.Callback then pcall(Data.Callback,val) end
                 MyEngine.Flags[Data.Flag or Data.Name or ""]=val
                 AddLog("トグル: "..(Data.Name or "?").." = "..tostring(val),"Action")
             end)
+            local Elem={}
+            function Elem:Set(v)
+                val=v
+                ApplyVisual(val, true)
+                if Data.Callback then pcall(Data.Callback,val) end
+                MyEngine.Flags[Data.Flag or Data.Name or ""]=val
+            end
+            function Elem:Get() return val end
+            return Elem
         end
 
         -- ── スライダー ────────────────────────────────────────
@@ -718,6 +733,10 @@ function MyEngine:CreateWindow(Config)
                     Upd(Min+(Max-Min)*math.clamp((mx-Trk.AbsolutePosition.X)/Trk.AbsoluteSize.X,0,1))
                 end
             end)
+            local Elem={}
+            function Elem:Set(v) Upd(v) end
+            function Elem:Get() return cur end
+            return Elem
         end
 
         -- ── ドロップダウン ────────────────────────────────────
@@ -770,6 +789,19 @@ function MyEngine:CreateWindow(Config)
                     MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
                 end)
             end
+            local Elem={}
+            function Elem:Set(opt)
+                DB.Text="  "..(Data.Name or "選択")..":  "..opt
+                op=false; OC.Visible=false; Arr.Text="▾"
+                TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
+                TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
+                if Data.Callback then pcall(Data.Callback,opt) end
+                MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
+            end
+            function Elem:Get()
+                local t=DB.Text:match(":  (.+)$"); return t
+            end
+            return Elem
         end
 
         -- ── キーバインド設定（V3新機能）────────────────────────
@@ -833,6 +865,340 @@ function MyEngine:CreateWindow(Config)
             end)
             KB.MouseLeave:Connect(function()
                 if not listening then TW(KB,{BackgroundColor3=Color3.fromRGB(26,26,36)},0.1) end
+            end)
+        end
+
+        -- ── テキスト入力 ──────────────────────────────────────
+        function Tab:CreateTextInput(Data)
+            local F=Instance.new("Frame")
+            F.Size=UDim2.new(1,0,0,70); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+            MkLabel(F,{
+                Size=UDim2.new(1,-20,0,22),Position=UDim2.new(0,14,0,6),
+                Text=Data.Name or "テキスト入力",TextSize=14,Font=Enum.Font.GothamSemibold,
+                TextColor3=Color3.fromRGB(95,115,155),
+            })
+            local TB=Instance.new("TextBox")
+            TB.Size=UDim2.new(1,-18,0,32); TB.Position=UDim2.new(0,9,1,-39)
+            TB.BackgroundColor3=Color3.fromRGB(13,13,18); TB.BorderSizePixel=0
+            TB.PlaceholderText=Data.PlaceholderText or "入力..."
+            TB.PlaceholderColor3=Color3.fromRGB(70,75,95)
+            TB.Text=Data.DefaultValue or ""
+            TB.TextColor3=Color3.fromRGB(220,225,240); TB.TextSize=16
+            TB.Font=Enum.Font.SourceSans; TB.ClearTextOnFocus=false; TB.Parent=F; CC(TB,6)
+            CS(TB,Color3.fromRGB(34,34,52),1)
+            -- フォーカス時ハイライト
+            TB.Focused:Connect(function() TW(TB,{BackgroundColor3=Color3.fromRGB(16,16,26)},0.1) end)
+            TB.FocusLost:Connect(function(enter)
+                TW(TB,{BackgroundColor3=Color3.fromRGB(13,13,18)},0.1)
+                if Data.Callback then pcall(Data.Callback, TB.Text, enter) end
+                MyEngine.Flags[Data.Flag or Data.Name or ""]=TB.Text
+                if enter then AddLog("入力確定: "..(Data.Name or "?").." = "..TB.Text,"Action") end
+            end)
+            local Elem={}
+            function Elem:Set(text) TB.Text=text or ""
+                MyEngine.Flags[Data.Flag or Data.Name or ""]=TB.Text
+            end
+            function Elem:Get() return TB.Text end
+            return Elem
+        end
+
+        -- ── カラーピッカー ────────────────────────────────────
+        function Tab:CreateColorPicker(Data)
+            -- H/S/V スライダー + プレビュー（折りたたみ式）
+            local initCol=Data.Color or Color3.fromRGB(255,85,85)
+            local H,S,V=initCol:ToHSV()
+            local opened=false
+
+            local F=Instance.new("Frame")
+            F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+
+            -- ヘッダー行
+            MkLabel(F,{
+                Size=UDim2.new(1,-80,1,0),Position=UDim2.new(0,14,0,0),
+                Text=Data.Name or "カラー",TextSize=17,Font=Enum.Font.SourceSans,
+            })
+            local Preview=Instance.new("Frame")
+            Preview.Size=UDim2.new(0,28,0,28); Preview.Position=UDim2.new(1,-68,0.5,-14)
+            Preview.BackgroundColor3=initCol; Preview.BorderSizePixel=0; Preview.Parent=F; CC(Preview,6)
+            CS(Preview,Color3.fromRGB(55,55,70),1)
+            local HexLbl=MkLabel(F,{
+                Size=UDim2.new(0,50,0,20),Position=UDim2.new(1,-118,0.5,-10),
+                Text="",TextSize=11,Font=Enum.Font.Code,
+                TextColor3=Color3.fromRGB(95,115,155),TextXAlignment=Enum.TextXAlignment.Right,
+            })
+            local TogBtn=Instance.new("TextButton")
+            TogBtn.Size=UDim2.new(0,22,0,22); TogBtn.Position=UDim2.new(1,-36,0.5,-11)
+            TogBtn.BackgroundColor3=Color3.fromRGB(28,28,38); TogBtn.BorderSizePixel=0
+            TogBtn.Text="▾"; TogBtn.TextColor3=Color3.fromRGB(155,160,185)
+            TogBtn.TextSize=14; TogBtn.Font=Enum.Font.GothamBold
+            TogBtn.AutoButtonColor=false; TogBtn.Parent=F; CC(TogBtn,6)
+
+            -- 展開パネル
+            local Panel=Instance.new("Frame")
+            Panel.Size=UDim2.new(1,0,0,0); Panel.Position=UDim2.new(0,0,1,4)
+            Panel.BackgroundColor3=Color3.fromRGB(15,15,19); Panel.BorderSizePixel=0
+            Panel.Visible=false; Panel.ZIndex=5; Panel.Parent=F; CC(Panel,7)
+            CS(Panel,Color3.fromRGB(34,34,48),1)
+
+            -- 大きなカラープレビュー
+            local BigPrev=Instance.new("Frame")
+            BigPrev.Size=UDim2.new(1,-20,0,46); BigPrev.Position=UDim2.new(0,10,0,10)
+            BigPrev.BackgroundColor3=initCol; BigPrev.BorderSizePixel=0; BigPrev.ZIndex=6; BigPrev.Parent=Panel
+            CC(BigPrev,8); CS(BigPrev,Color3.fromRGB(50,50,70),1.5)
+            MkLabel(BigPrev,{
+                Size=UDim2.new(1,0,1,0),Position=UDim2.new(0,0,0,0),
+                Text="",ZIndex=7,
+            })
+
+            -- HSVスライダーを作るヘルパー
+            local function MkHsvSlider(label, yPos, initVal, col1, col2)
+                MkLabel(Panel,{
+                    Size=UDim2.new(0,14,0,16),Position=UDim2.new(0,10,0,yPos),
+                    Text=label,TextSize=12,Font=Enum.Font.GothamSemibold,
+                    TextColor3=Color3.fromRGB(95,115,155),ZIndex=6,
+                })
+                local ValLbl=MkLabel(Panel,{
+                    Size=UDim2.new(0,28,0,16),Position=UDim2.new(1,-34,0,yPos),
+                    Text="",TextSize=11,Font=Enum.Font.Code,
+                    TextColor3=Color3.fromRGB(95,115,155),ZIndex=6,
+                    TextXAlignment=Enum.TextXAlignment.Right,
+                })
+                local TrkBG=Instance.new("Frame")
+                TrkBG.Size=UDim2.new(1,-54,0,8); TrkBG.Position=UDim2.new(0,26,0,yPos+4)
+                TrkBG.BorderSizePixel=0; TrkBG.ZIndex=6; TrkBG.Parent=Panel; CC(TrkBG,100)
+                -- グラデーション
+                local Grad=Instance.new("UIGradient")
+                Grad.Color=ColorSequence.new{
+                    ColorSequenceKeypoint.new(0,col1),
+                    ColorSequenceKeypoint.new(1,col2),
+                }
+                Grad.Parent=TrkBG
+                local Knob=Instance.new("Frame")
+                Knob.Size=UDim2.new(0,14,0,14); Knob.AnchorPoint=Vector2.new(0.5,0.5)
+                Knob.Position=UDim2.new(initVal,0,0.5,0); Knob.BackgroundColor3=Color3.fromRGB(255,255,255)
+                Knob.BorderSizePixel=0; Knob.ZIndex=8; Knob.Parent=TrkBG; CC(Knob,100)
+                CS(Knob,Color3.fromRGB(120,120,140),1)
+                local dr=false
+                TrkBG.InputBegan:Connect(function(i)
+                    if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=true end
+                end)
+                UserInputService.InputEnded:Connect(function(i)
+                    if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=false end
+                end)
+                local curVal=initVal
+                RunService.RenderStepped:Connect(function()
+                    if dr and Panel.Visible then
+                        local mx=UserInputService:GetMouseLocation().X
+                        curVal=math.clamp((mx-TrkBG.AbsolutePosition.X)/TrkBG.AbsoluteSize.X,0,1)
+                        Knob.Position=UDim2.new(curVal,0,0.5,0)
+                        ValLbl.Text=tostring(math.floor(curVal*100)).."%"
+                    end
+                end)
+                ValLbl.Text=tostring(math.floor(initVal*100)).."%"
+                return function() return curVal end, ValLbl, Knob
+            end
+
+            local function UpdateHGrad()
+                -- Hスライダーのグラデーションは虹色（固定）
+            end
+
+            local GetH, HValLbl, HKnob = MkHsvSlider("H", 66, H,
+                Color3.fromRGB(255,0,0), Color3.fromRGB(255,0,0)) -- 後で虹に上書き
+            local GetS, SValLbl, SKnob = MkHsvSlider("S", 92, S,
+                Color3.fromRGB(180,180,180), Color3.fromRGB(255,85,85))
+            local GetV, VValLbl, VKnob = MkHsvSlider("V", 118, V,
+                Color3.fromRGB(0,0,0), Color3.fromRGB(255,255,255))
+
+            -- H スライダーを虹色グラデーションに変更
+            local HTrkBG = HKnob.Parent
+            local oldGrad = HTrkBG:FindFirstChildOfClass("UIGradient")
+            if oldGrad then oldGrad:Destroy() end
+            local RainbowGrad=Instance.new("UIGradient")
+            RainbowGrad.Color=ColorSequence.new{
+                ColorSequenceKeypoint.new(0,   Color3.fromRGB(255,0,0)),
+                ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255,255,0)),
+                ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0,255,0)),
+                ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0,255,255)),
+                ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0,0,255)),
+                ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255,0,255)),
+                ColorSequenceKeypoint.new(1,   Color3.fromRGB(255,0,0)),
+            }
+            RainbowGrad.Parent=HTrkBG
+
+            -- HEX変換
+            local function ToHex(c)
+                return string.format("#%02X%02X%02X",
+                    math.floor(c.R*255),math.floor(c.G*255),math.floor(c.B*255))
+            end
+
+            local curColor=initCol
+            -- リアルタイム更新ループ
+            task.spawn(function()
+                while F.Parent do
+                    if Panel.Visible then
+                        local newH=GetH(); local newS=GetS(); local newV=GetV()
+                        local nc=Color3.fromHSV(newH,newS,newV)
+                        if nc~=curColor then
+                            curColor=nc
+                            Preview.BackgroundColor3=curColor
+                            BigPrev.BackgroundColor3=curColor
+                            HexLbl.Text=ToHex(curColor)
+                            -- Sスライダーのグラデーションを現在のHで更新
+                            local STrk=SKnob.Parent
+                            local sg=STrk:FindFirstChildOfClass("UIGradient")
+                            if sg then
+                                sg.Color=ColorSequence.new{
+                                    ColorSequenceKeypoint.new(0,Color3.fromHSV(newH,0,newV)),
+                                    ColorSequenceKeypoint.new(1,Color3.fromHSV(newH,1,newV)),
+                                }
+                            end
+                            if Data.Callback then pcall(Data.Callback,curColor) end
+                            MyEngine.Flags[Data.Flag or Data.Name or ""]=curColor
+                        end
+                    end
+                    task.wait(0.05)
+                end
+            end)
+
+            -- HEX表示を初期化
+            HexLbl.Text=ToHex(initCol)
+
+            -- 折りたたみ高さ
+            local PANEL_H = 148
+            TogBtn.MouseButton1Click:Connect(function()
+                opened=not opened
+                Panel.Visible=opened
+                TogBtn.Text=opened and "▴" or "▾"
+                TW(F,{Size=UDim2.new(1,0,0,opened and 44+PANEL_H+6 or 44)},0.2)
+                if opened then Panel.Size=UDim2.new(1,0,0,PANEL_H) end
+            end)
+
+            local Elem={}
+            function Elem:Set(color3)
+                curColor=color3; H,S,V=color3:ToHSV()
+                HKnob.Position=UDim2.new(H,0,0.5,0)
+                SKnob.Position=UDim2.new(S,0,0.5,0)
+                VKnob.Position=UDim2.new(V,0,0.5,0)
+                HValLbl.Text=tostring(math.floor(H*100)).."%"
+                SValLbl.Text=tostring(math.floor(S*100)).."%"
+                VValLbl.Text=tostring(math.floor(V*100)).."%"
+                Preview.BackgroundColor3=curColor
+                BigPrev.BackgroundColor3=curColor
+                HexLbl.Text=ToHex(curColor)
+                if Data.Callback then pcall(Data.Callback,curColor) end
+                MyEngine.Flags[Data.Flag or Data.Name or ""]=curColor
+            end
+            function Elem:Get() return curColor end
+            return Elem
+        end
+
+        -- ── ログビューアー ────────────────────────────────────
+        function Tab:CreateLogViewer()
+            local LOG_COLORS={
+                Info    = Color3.fromRGB(160,170,190),
+                Action  = Color3.fromRGB(70,150,255),
+                Success = Color3.fromRGB(65,210,100),
+                Warning = Color3.fromRGB(240,175,45),
+                Error   = Color3.fromRGB(215,70,70),
+            }
+            local LOG_BADGES={
+                Info="INFO", Action="ACT", Success="OK",
+                Warning="WARN", Error="ERR",
+            }
+            local F=Instance.new("Frame")
+            F.Size=UDim2.new(1,0,0,360); F.BackgroundColor3=Color3.fromRGB(16,16,20)
+            F.BorderSizePixel=0; F.Parent=TC; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
+
+            -- ヘッダー行
+            MkLabel(F,{
+                Size=UDim2.new(1,-80,0,32),Position=UDim2.new(0,14,0,6),
+                Text="ログ",TextSize=18,Font=Enum.Font.SourceSansBold,
+                TextColor3=Color3.fromRGB(255,255,255),
+            })
+            -- クリアボタン
+            local ClearBtn=Instance.new("TextButton")
+            ClearBtn.Size=UDim2.new(0,64,0,26); ClearBtn.Position=UDim2.new(1,-72,0,9)
+            ClearBtn.BackgroundColor3=Color3.fromRGB(22,22,30); ClearBtn.BorderSizePixel=0
+            ClearBtn.Text="クリア"; ClearBtn.TextColor3=Color3.fromRGB(180,80,80)
+            ClearBtn.TextSize=14; ClearBtn.Font=Enum.Font.GothamSemibold
+            ClearBtn.AutoButtonColor=false; ClearBtn.Parent=F; CC(ClearBtn,6)
+            CS(ClearBtn,Color3.fromRGB(80,30,30),1)
+            ClearBtn.MouseEnter:Connect(function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(32,18,18)},0.1) end)
+            ClearBtn.MouseLeave:Connect(function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.1) end)
+
+            -- 区切り線
+            local Sep=Instance.new("Frame")
+            Sep.Size=UDim2.new(1,-24,0,1); Sep.Position=UDim2.new(0,12,0,42)
+            Sep.BackgroundColor3=Color3.fromRGB(28,28,38); Sep.BorderSizePixel=0; Sep.Parent=F
+
+            -- スクロール領域
+            local SF=Instance.new("ScrollingFrame")
+            SF.Size=UDim2.new(1,-12,0,302); SF.Position=UDim2.new(0,6,0,48)
+            SF.BackgroundTransparency=1; SF.BorderSizePixel=0
+            SF.ScrollBarThickness=3; SF.ScrollBarImageColor3=Color3.fromRGB(55,55,65)
+            SF.ScrollingDirection=Enum.ScrollingDirection.Y; SF.Parent=F
+            local LL=Instance.new("UIListLayout")
+            LL.Padding=UDim.new(0,2); LL.SortOrder=Enum.SortOrder.LayoutOrder; LL.Parent=SF
+            local LP=Instance.new("UIPadding")
+            LP.PaddingTop=UDim.new(0,4); LP.PaddingBottom=UDim.new(0,4)
+            LP.PaddingLeft=UDim.new(0,4); LP.PaddingRight=UDim.new(0,4); LP.Parent=SF
+
+            local function Rebuild()
+                for _,c in pairs(SF:GetChildren()) do
+                    if c:IsA("Frame") then c:Destroy() end
+                end
+                local logs=MyEngine.Logs
+                for i=#logs,math.max(1,#logs-79),-1 do  -- 最新80件（新しい順）
+                    local log=logs[i]
+                    local col=LOG_COLORS[log.Type] or LOG_COLORS.Info
+                    local badge=LOG_BADGES[log.Type] or "INFO"
+                    local Row=Instance.new("Frame")
+                    Row.Size=UDim2.new(1,0,0,26); Row.BackgroundTransparency=1; Row.Parent=SF
+                    -- バッジ
+                    local BadgeF=Instance.new("Frame")
+                    BadgeF.Size=UDim2.new(0,38,0,18); BadgeF.Position=UDim2.new(0,0,0.5,-9)
+                    BadgeF.BackgroundColor3=col; BadgeF.BackgroundTransparency=0.72
+                    BadgeF.BorderSizePixel=0; BadgeF.Parent=Row; CC(BadgeF,4)
+                    MkLabel(BadgeF,{
+                        Size=UDim2.new(1,0,1,0),Text=badge,
+                        TextSize=10,Font=Enum.Font.GothamBold,
+                        TextColor3=col,TextXAlignment=Enum.TextXAlignment.Center,
+                    })
+                    -- 時刻
+                    MkLabel(Row,{
+                        Size=UDim2.new(0,62,1,0),Position=UDim2.new(0,42,0,0),
+                        Text=log.Time,TextSize=11,Font=Enum.Font.Code,
+                        TextColor3=Color3.fromRGB(55,65,90),
+                    })
+                    -- メッセージ
+                    MkLabel(Row,{
+                        Size=UDim2.new(1,-108,1,0),Position=UDim2.new(0,108,0,0),
+                        Text=log.Message,TextSize=13,Font=Enum.Font.SourceSans,
+                        TextColor3=col,TextTruncate=Enum.TextTruncate.AtEnd,
+                    })
+                end
+                SF.CanvasSize=UDim2.new(0,0,0,LL.AbsoluteContentSize.Y+8)
+            end
+
+            -- 初回描画
+            Rebuild()
+
+            -- クリアボタン
+            ClearBtn.MouseButton1Click:Connect(function()
+                MyEngine.Logs={}
+                TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(40,20,20)},0.06)
+                task.delay(0.08,function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.12) end)
+                Rebuild()
+                AddLog("ログをクリアしました","Info")
+            end)
+
+            -- リアルタイム更新：AddLogが呼ばれるたびにリビルド
+            local listenId = tostring(tick())
+            LogListeners[listenId]=Rebuild
+            F.AncestryChanged:Connect(function()
+                if not F.Parent then LogListeners[listenId]=nil end
             end)
         end
 
@@ -1054,5 +1420,5 @@ end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v3.1 起動完了 | トグルキー: "..tostring(MyEngine.ToggleKey))
+print("[af_hub] v3.2 起動完了 | トグルキー: "..tostring(MyEngine.ToggleKey))
 return MyEngine
