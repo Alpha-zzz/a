@@ -641,18 +641,29 @@ function MyEngine:CreateWindow(Config)
             local F=Instance.new("Frame")
             F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
             F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+
+            -- ラベル
             MkLabel(F,{
-                Size=UDim2.new(1,-64,1,0),Position=UDim2.new(0,14,0,0),
+                Size=UDim2.new(1,-72,1,0),Position=UDim2.new(0,14,0,0),
                 Text=Data.Name or "トグル",TextSize=17,Font=Enum.Font.SourceSans,
             })
-            local Trk=Instance.new("TextButton")
-            Trk.Size=UDim2.new(0,48,0,24); Trk.Position=UDim2.new(1,-56,0.5,-12)
+
+            -- スイッチ本体（Frameに変更 → 見た目専用）
+            local Trk=Instance.new("Frame")
+            Trk.Size=UDim2.new(0,48,0,24); Trk.Position=UDim2.new(1,-58,0.5,-12)
             Trk.BackgroundColor3=Color3.fromRGB(36,36,44); Trk.BorderSizePixel=0
-            Trk.Text=""; Trk.AutoButtonColor=false; Trk.Parent=F; CC(Trk,100)
+            Trk.Parent=F; CC(Trk,100)
             local Cir=Instance.new("Frame")
             Cir.Size=UDim2.new(0,20,0,20); Cir.Position=UDim2.new(0,2,0.5,-10)
             Cir.BackgroundColor3=Color3.fromRGB(185,185,200); Cir.BorderSizePixel=0
             Cir.Parent=Trk; CC(Cir,100)
+
+            -- 行全体を覆う透明ボタン（クリック判定を行全体に拡大）
+            local HitBtn=Instance.new("TextButton")
+            HitBtn.Size=UDim2.new(1,0,1,0); HitBtn.Position=UDim2.new(0,0,0,0)
+            HitBtn.BackgroundTransparency=1; HitBtn.Text=""
+            HitBtn.AutoButtonColor=false; HitBtn.ZIndex=5; HitBtn.Parent=F
+
             local val=Data.CurrentValue or false
             local function ApplyVisual(v, animate)
                 if v then
@@ -668,13 +679,24 @@ function MyEngine:CreateWindow(Config)
                 end
             end
             ApplyVisual(val, false)
-            Trk.MouseButton1Click:Connect(function()
+
+            -- ホバー時に行全体を薄くハイライト
+            HitBtn.MouseEnter:Connect(function()
+                TW(F,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.08)
+            end)
+            HitBtn.MouseLeave:Connect(function()
+                TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.08)
+            end)
+
+            -- クリック判定：行全体
+            HitBtn.MouseButton1Click:Connect(function()
                 val=not val
                 ApplyVisual(val, true)
                 if Data.Callback then pcall(Data.Callback,val) end
                 MyEngine.Flags[Data.Flag or Data.Name or ""]=val
                 AddLog("トグル: "..(Data.Name or "?").." = "..tostring(val),"Action")
             end)
+
             local Elem={}
             function Elem:Set(v)
                 val=v
