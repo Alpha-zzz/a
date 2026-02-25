@@ -722,17 +722,29 @@ function MyEngine:CreateWindow(Config)
                 Size=UDim2.new(1,-80,0,22),Position=UDim2.new(0,13,0,7),
                 Text=Data.Name or "スライダー",TextSize=17,Font=Enum.Font.SourceSans,
             })
+
+            -- トラック本体（見た目専用・高さ6px）
             local Trk=Instance.new("Frame")
-            Trk.Size=UDim2.new(1,-24,0,6); Trk.Position=UDim2.new(0,12,1,-19)
+            Trk.Size=UDim2.new(1,-24,0,6); Trk.Position=UDim2.new(0,12,1,-22)
             Trk.BackgroundColor3=Color3.fromRGB(30,30,38); Trk.BorderSizePixel=0
             Trk.Parent=F; CC(Trk,100)
             local Fil=Instance.new("Frame")
             Fil.Size=UDim2.new(0,0,1,0); Fil.BackgroundColor3=Color3.fromRGB(42,138,242)
             Fil.BorderSizePixel=0; Fil.Parent=Trk; CC(Fil,100)
+
+            -- Knob（18px、ドラッグ中は少し大きくなる）
             local Knob=Instance.new("Frame")
-            Knob.Size=UDim2.new(0,14,0,14); Knob.Position=UDim2.new(1,-7,0.5,-7)
+            Knob.Size=UDim2.new(0,18,0,18); Knob.Position=UDim2.new(1,-9,0.5,-9)
             Knob.BackgroundColor3=Color3.fromRGB(255,255,255); Knob.BorderSizePixel=0
-            Knob.ZIndex=2; Knob.Parent=Fil; CC(Knob,100)
+            Knob.ZIndex=3; Knob.Parent=Fil; CC(Knob,100)
+            CS(Knob,Color3.fromRGB(100,160,255),1.5)
+
+            -- 透明な当たり判定ゾーン（高さ28px、トラックを中心に上下に広い）
+            local HitZone=Instance.new("TextButton")
+            HitZone.Size=UDim2.new(1,-24,0,28); HitZone.Position=UDim2.new(0,12,1,-35)
+            HitZone.BackgroundTransparency=1; HitZone.Text=""
+            HitZone.AutoButtonColor=false; HitZone.ZIndex=4; HitZone.Parent=F
+
             local Min,Max=Data.Range[1],Data.Range[2]
             local Inc=Data.Increment or 1; local cur=Data.CurrentValue or Min; local dr=false
             local function Upd(v)
@@ -743,12 +755,32 @@ function MyEngine:CreateWindow(Config)
                 MyEngine.Flags[Data.Flag or Data.Name or ""]=v
             end
             Upd(cur)
-            Trk.InputBegan:Connect(function(i)
-                if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=true end
+
+            -- ドラッグ開始：HitZone全体から受け付ける
+            HitZone.InputBegan:Connect(function(i)
+                if i.UserInputType==Enum.UserInputType.MouseButton1 then
+                    dr=true
+                    TW(Knob,{Size=UDim2.new(0,22,0,22),Position=UDim2.new(1,-11,0.5,-11)},0.1)
+                    -- クリックした位置に即ジャンプ
+                    local mx=UserInputService:GetMouseLocation().X
+                    Upd(Min+(Max-Min)*math.clamp((mx-Trk.AbsolutePosition.X)/Trk.AbsoluteSize.X,0,1))
+                end
             end)
             UserInputService.InputEnded:Connect(function(i)
-                if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=false end
+                if i.UserInputType==Enum.UserInputType.MouseButton1 and dr then
+                    dr=false
+                    TW(Knob,{Size=UDim2.new(0,18,0,18),Position=UDim2.new(1,-9,0.5,-9)},0.1)
+                end
             end)
+
+            -- ホバー時にKnobを少し光らせる
+            HitZone.MouseEnter:Connect(function()
+                TW(Knob,{BackgroundColor3=Color3.fromRGB(220,235,255)},0.1)
+            end)
+            HitZone.MouseLeave:Connect(function()
+                if not dr then TW(Knob,{BackgroundColor3=Color3.fromRGB(255,255,255)},0.1) end
+            end)
+
             RunService.RenderStepped:Connect(function()
                 if dr then
                     local mx=UserInputService:GetMouseLocation().X
