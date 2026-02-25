@@ -1,55 +1,29 @@
---[[
-    ╔═══════════════════════════════════════════════════════════════════════════╗
-    ║                    🔥 俺専用GUI ENGINE - ULTIMATE 🔥                     ║
-    ║              Rayfield互換・最高にモダン・最強のカスタムUI                ║
-    ╚═══════════════════════════════════════════════════════════════════════════╝
+\--[[
+    俺専用GUI ENGINE - ULTIMATE
+    Rayfield互換・最高にモダン・最強のカスタムUI
     
-    ✅ 完全実装機能:
+    完全実装機能:
     - サイドバー方式（爆速タブ切り替え）
     - アカウント名・アイコン表示
-    - ハイテク起動アニメーション
+    - ハイテック起動アニメーション
     - 閉じないプレイヤーリスト（アイコン・名前・ID表示）
     - ワンクリックキルリスト登録/解除
     - 自動追跡ブラックリスト（再入室検知）
     - 検索機能（リアルタイムフィルタ）
-    - 実行ログ表示
-    - サーバー情報表示
     - Rayfield API完全互換
-    
-    🎨 デザイン:
-    - モダンでダーク（Rayfieldより洗練）
-    - 滑らかなアニメーション（TweenService）
-    - UICorner/UIStroke/UIGradient
-    - CanvasGroupでフェードイン
-    
-    📋 互換性:
-    - 既存のRayfieldスクリプトがそのまま動く
-    - CreateWindow/CreateTab/CreateButton等すべて対応
 ]]
 
-print([[
-╔═══════════════════════════════════════════════════════════════════════════╗
-║                    🔥 俺専用GUI ENGINE - ULTIMATE 🔥                     ║
-║              Rayfield互換・最高にモダン・最強のカスタムUI                ║
-╚═══════════════════════════════════════════════════════════════════════════╝
-
-✅ すべての機能が動作します
-✅ Rayfield互換で既存スクリプト使用可能
-✅ 最高にモダンなデザイン
-
-]])
-
--- ==================== サービス ====================
+-- サービス
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
--- ==================== ローカルプレイヤー ====================
+-- ローカルプレイヤー
 local LocalPlayer = Players.LocalPlayer
 
--- ==================== 俺専用エンジン ====================
+-- 俺専用エンジン
 local MyEngine = {
     Flags = {},
     Tabs = {},
@@ -61,7 +35,7 @@ local MyEngine = {
     Logs = {}
 }
 
--- ==================== ユーティリティ ====================
+-- ユーティリティ関数
 local function CreateCorner(parent, radius)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, radius or 8)
@@ -100,9 +74,9 @@ local function AddLog(message, logType)
     end
 end
 
--- ==================== メインUI作成 ====================
+-- CreateWindow
 function MyEngine:CreateWindow(Config)
-    local WindowName = Config.Name or "俺専用GUI"
+    local WindowName = Config.Name or "MyGUI"
     
     -- ScreenGui作成
     local ScreenGui = Instance.new("ScreenGui")
@@ -111,7 +85,7 @@ function MyEngine:CreateWindow(Config)
     ScreenGui.ResetOnSpawn = false
     ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
     
-    -- メインフレーム（CanvasGroup）
+    -- メインフレーム
     local Main = Instance.new("CanvasGroup")
     Main.Name = "Main"
     Main.Size = UDim2.new(0, 0, 0, 0)
@@ -133,7 +107,7 @@ function MyEngine:CreateWindow(Config)
     Gradient.Rotation = 90
     Gradient.Parent = Main
     
-    -- ==================== サイドバー ====================
+    -- サイドバー
     local Sidebar = Instance.new("Frame")
     Sidebar.Name = "Sidebar"
     Sidebar.Size = UDim2.new(0, 200, 1, 0)
@@ -143,7 +117,7 @@ function MyEngine:CreateWindow(Config)
     Sidebar.Parent = Main
     CreateCorner(Sidebar, 12)
     
-    -- サイドバー右側の境界線
+    -- サイドバー境界線
     local SidebarDivider = Instance.new("Frame")
     SidebarDivider.Size = UDim2.new(0, 1, 1, 0)
     SidebarDivider.Position = UDim2.new(1, 0, 0, 0)
@@ -180,7 +154,7 @@ function MyEngine:CreateWindow(Config)
     TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
     TabLayout.Parent = TabContainer
     
-    -- ==================== アカウント情報セクション ====================
+    -- アカウント情報セクション
     local AccountSection = Instance.new("Frame")
     AccountSection.Name = "AccountSection"
     AccountSection.Size = UDim2.new(1, -10, 0, 70)
@@ -235,7 +209,7 @@ function MyEngine:CreateWindow(Config)
     OnlineText.TextXAlignment = Enum.TextXAlignment.Left
     OnlineText.Parent = AccountSection
     
-    -- ==================== コンテンツエリア ====================
+    -- コンテンツエリア
     local ContentArea = Instance.new("Frame")
     ContentArea.Name = "ContentArea"
     ContentArea.Size = UDim2.new(1, -210, 1, -20)
@@ -243,23 +217,15 @@ function MyEngine:CreateWindow(Config)
     ContentArea.BackgroundTransparency = 1
     ContentArea.Parent = Main
     
-    -- ==================== 起動アニメーション ====================
+    -- 起動アニメーション
     task.spawn(function()
-        -- ステップ1: サイズを広げる
-        Tween(Main, {
-            Size = UDim2.new(0, 800, 0, 500)
-        }, 0.8, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-        
-        -- ステップ2: フェードイン
+        Tween(Main, {Size = UDim2.new(0, 800, 0, 500)}, 0.8, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
         task.wait(0.1)
-        Tween(Main, {
-            GroupAlpha = 1
-        }, 0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-        
+        Tween(Main, {GroupAlpha = 1}, 0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
         AddLog("GUI起動完了", "Success")
     end)
     
-    -- ==================== Window オブジェクト ====================
+    -- Windowオブジェクト
     local Window = {
         _Main = Main,
         _Sidebar = Sidebar,
@@ -268,7 +234,7 @@ function MyEngine:CreateWindow(Config)
         _Tabs = {}
     }
     
-    -- ==================== CreateTab ====================
+    -- CreateTab
     function Window:CreateTab(TabName, Icon)
         local TabButton = Instance.new("TextButton")
         TabButton.Name = TabName
@@ -284,7 +250,6 @@ function MyEngine:CreateWindow(Config)
         TabButton.Parent = TabContainer
         CreateCorner(TabButton, 6)
         
-        -- タブコンテンツ
         local TabContent = Instance.new("ScrollingFrame")
         TabContent.Name = TabName .. "_Content"
         TabContent.Size = UDim2.new(1, 0, 1, 0)
@@ -300,28 +265,20 @@ function MyEngine:CreateWindow(Config)
         ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
         ContentLayout.Parent = TabContent
         
-        -- タブ切り替え
         TabButton.MouseButton1Click:Connect(function()
-            -- すべてのタブを非表示
             for _, tab in pairs(Window._Tabs) do
                 tab.Button.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
                 tab.Button.TextColor3 = Color3.fromRGB(200, 200, 200)
                 tab.Content.Visible = false
             end
             
-            -- 選択されたタブを表示
             TabButton.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
             TabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
             TabContent.Visible = true
             
-            -- フェードインアニメーション
-            TabContent.GroupTransparency = 1
-            Tween(TabContent, {GroupTransparency = 0}, 0.3)
-            
             AddLog("タブ切り替え: " .. TabName, "Info")
         end)
         
-        -- 最初のタブを自動表示
         if #Window._Tabs == 0 then
             TabButton.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
             TabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -336,7 +293,7 @@ function MyEngine:CreateWindow(Config)
         
         table.insert(Window._Tabs, Tab)
         
-        -- ==================== CreateButton ====================
+        -- CreateButton
         function Tab:CreateButton(Data)
             local ButtonFrame = Instance.new("Frame")
             ButtonFrame.Size = UDim2.new(1, -10, 0, 40)
@@ -367,7 +324,7 @@ function MyEngine:CreateWindow(Config)
             end)
         end
         
-        -- ==================== CreateToggle ====================
+        -- CreateToggle
         function Tab:CreateToggle(Data)
             local ToggleFrame = Instance.new("Frame")
             ToggleFrame.Size = UDim2.new(1, -10, 0, 40)
@@ -432,7 +389,7 @@ function MyEngine:CreateWindow(Config)
             end)
         end
         
-        -- ==================== CreateSlider ====================
+        -- CreateSlider
         function Tab:CreateSlider(Data)
             local SliderFrame = Instance.new("Frame")
             SliderFrame.Size = UDim2.new(1, -10, 0, 60)
@@ -528,7 +485,7 @@ function MyEngine:CreateWindow(Config)
             end)
         end
         
-        -- ==================== CreateDropdown ====================
+        -- CreateDropdown
         function Tab:CreateDropdown(Data)
             local DropdownFrame = Instance.new("Frame")
             DropdownFrame.Size = UDim2.new(1, -10, 0, 40)
@@ -604,7 +561,7 @@ function MyEngine:CreateWindow(Config)
             end
         end
         
-        -- ==================== 俺専用: CreatePlayerList ====================
+        -- CreatePlayerList（俺専用・革命的機能）
         function Tab:CreatePlayerList(Data)
             local ListFrame = Instance.new("Frame")
             ListFrame.Size = UDim2.new(1, -10, 0, 400)
@@ -614,25 +571,23 @@ function MyEngine:CreateWindow(Config)
             CreateCorner(ListFrame, 8)
             CreateStroke(ListFrame, Color3.fromRGB(40, 40, 45), 1)
             
-            -- タイトル
             local ListTitle = Instance.new("TextLabel")
             ListTitle.Size = UDim2.new(1, -20, 0, 30)
             ListTitle.Position = UDim2.new(0, 10, 0, 5)
             ListTitle.BackgroundTransparency = 1
-            ListTitle.Text = Data.Name or "プレイヤーリスト"
+            ListTitle.Text = Data.Name or "Player List"
             ListTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
             ListTitle.TextSize = 15
             ListTitle.Font = Enum.Font.GothamBold
             ListTitle.TextXAlignment = Enum.TextXAlignment.Left
             ListTitle.Parent = ListFrame
             
-            -- 検索バー
             local SearchBar = Instance.new("TextBox")
             SearchBar.Size = UDim2.new(1, -20, 0, 35)
             SearchBar.Position = UDim2.new(0, 10, 0, 40)
             SearchBar.BackgroundColor3 = Color3.fromRGB(15, 15, 17)
             SearchBar.BorderSizePixel = 0
-            SearchBar.PlaceholderText = "🔍 プレイヤーを検索..."
+            SearchBar.PlaceholderText = "Search players..."
             SearchBar.PlaceholderColor3 = Color3.fromRGB(100, 100, 100)
             SearchBar.Text = ""
             SearchBar.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -641,7 +596,6 @@ function MyEngine:CreateWindow(Config)
             SearchBar.Parent = ListFrame
             CreateCorner(SearchBar, 6)
             
-            -- プレイヤースクロール
             local PlayerScroll = Instance.new("ScrollingFrame")
             PlayerScroll.Size = UDim2.new(1, -20, 1, -90)
             PlayerScroll.Position = UDim2.new(0, 10, 0, 80)
@@ -655,10 +609,9 @@ function MyEngine:CreateWindow(Config)
             PlayerLayout.Padding = UDim.new(0, 5)
             PlayerLayout.Parent = PlayerScroll
             
-            -- プレイヤーカード作成
             local function CreatePlayerCard(player)
                 if PlayerScroll:FindFirstChild(player.Name) then
-                    return -- 既に存在
+                    return
                 end
                 
                 local Card = Instance.new("Frame")
@@ -671,7 +624,6 @@ function MyEngine:CreateWindow(Config)
                 
                 local CardStroke = CreateStroke(Card, Color3.fromRGB(40, 40, 45), 2)
                 
-                -- アイコン（左側）
                 local Icon = Instance.new("ImageLabel")
                 Icon.Size = UDim2.new(0, 45, 0, 45)
                 Icon.Position = UDim2.new(0, 8, 0.5, -22)
@@ -680,14 +632,12 @@ function MyEngine:CreateWindow(Config)
                 Icon.Parent = Card
                 CreateCorner(Icon, 100)
                 
-                -- 情報コンテナ（右側）
                 local InfoContainer = Instance.new("Frame")
                 InfoContainer.Size = UDim2.new(1, -65, 1, 0)
                 InfoContainer.Position = UDim2.new(0, 60, 0, 0)
                 InfoContainer.BackgroundTransparency = 1
                 InfoContainer.Parent = Card
                 
-                -- 名前
                 local NameLabel = Instance.new("TextLabel")
                 NameLabel.Size = UDim2.new(1, -10, 0, 25)
                 NameLabel.Position = UDim2.new(0, 0, 0.15, 0)
@@ -700,7 +650,6 @@ function MyEngine:CreateWindow(Config)
                 NameLabel.TextTruncate = Enum.TextTruncate.AtEnd
                 NameLabel.Parent = InfoContainer
                 
-                -- ID
                 local IdLabel = Instance.new("TextLabel")
                 IdLabel.Size = UDim2.new(1, -10, 0, 18)
                 IdLabel.Position = UDim2.new(0, 0, 0.6, 0)
@@ -712,36 +661,30 @@ function MyEngine:CreateWindow(Config)
                 IdLabel.TextXAlignment = Enum.TextXAlignment.Left
                 IdLabel.Parent = InfoContainer
                 
-                -- クリック検知
                 local Hitbox = Instance.new("TextButton")
                 Hitbox.Size = UDim2.new(1, 0, 1, 0)
                 Hitbox.BackgroundTransparency = 1
                 Hitbox.Text = ""
                 Hitbox.Parent = Card
                 
-                -- トグル機能（キルリスト登録/解除）
                 Hitbox.MouseButton1Click:Connect(function()
                     if not MyEngine.KillList[player.UserId] then
-                        -- キルリスト追加
                         MyEngine.KillList[player.UserId] = true
                         Tween(CardStroke, {Color = Color3.fromRGB(255, 50, 50)}, 0.2)
                         CardStroke.Thickness = 3
-                        AddLog("キルリスト追加: " .. player.Name, "Action")
+                        AddLog("Kill List ADD: " .. player.Name, "Action")
                         
-                        -- ブラックリスト登録
                         MyEngine.Blacklist[player.UserId] = player.Name
                         
                         if Data.Callback then
                             pcall(Data.Callback, player, true)
                         end
                     else
-                        -- キルリスト削除
                         MyEngine.KillList[player.UserId] = nil
                         Tween(CardStroke, {Color = Color3.fromRGB(40, 40, 45)}, 0.2)
                         CardStroke.Thickness = 2
-                        AddLog("キルリスト削除: " .. player.Name, "Action")
+                        AddLog("Kill List REMOVE: " .. player.Name, "Action")
                         
-                        -- ブラックリスト解除
                         MyEngine.Blacklist[player.UserId] = nil
                         
                         if Data.Callback then
@@ -751,9 +694,7 @@ function MyEngine:CreateWindow(Config)
                 end)
             end
             
-            -- リスト更新（閉じない）
             local function RefreshList()
-                -- 既存のカードをチェック
                 for _, card in pairs(PlayerScroll:GetChildren()) do
                     if card:IsA("Frame") and card.Name ~= "UIListLayout" then
                         local playerExists = Players:FindFirstChild(card.Name)
@@ -763,18 +704,15 @@ function MyEngine:CreateWindow(Config)
                     end
                 end
                 
-                -- 新しいプレイヤー追加
                 for _, player in pairs(Players:GetPlayers()) do
                     if player ~= LocalPlayer then
                         CreatePlayerCard(player)
                     end
                 end
                 
-                -- キャンバスサイズ更新
                 PlayerScroll.CanvasSize = UDim2.new(0, 0, 0, PlayerLayout.AbsoluteContentSize.Y + 10)
             end
             
-            -- 検索機能
             SearchBar:GetPropertyChangedSignal("Text"):Connect(function()
                 local searchText = SearchBar.Text:lower()
                 for _, card in pairs(PlayerScroll:GetChildren()) do
@@ -788,19 +726,16 @@ function MyEngine:CreateWindow(Config)
                 end
             end)
             
-            -- プレイヤー監視
             Players.PlayerAdded:Connect(function(player)
                 task.wait(0.5)
                 RefreshList()
                 
-                -- ブラックリストチェック（再入室検知）
                 if MyEngine.Blacklist[player.UserId] then
-                    AddLog("⚠️ ターゲット再入室: " .. player.Name, "Warning")
+                    AddLog("TARGET REJOINED: " .. player.Name, "Warning")
                     MyEngine.KillList[player.UserId] = true
                     task.wait(0.5)
                     RefreshList()
                     
-                    -- カードの枠を赤くする
                     local card = PlayerScroll:FindFirstChild(player.Name)
                     if card then
                         local stroke = card:FindFirstChildOfClass("UIStroke")
@@ -817,7 +752,6 @@ function MyEngine:CreateWindow(Config)
                 RefreshList()
             end)
             
-            -- 初回実行
             RefreshList()
         end
         
@@ -827,10 +761,7 @@ function MyEngine:CreateWindow(Config)
     return Window
 end
 
--- ==================== Rayfield互換性のためにグローバル登録 ====================
-getgenv().Rayfield = MyEngine
-
--- ==================== 通知システム ====================
+-- Notify
 function MyEngine:Notify(Data)
     local NotifyGui = Instance.new("ScreenGui")
     NotifyGui.Name = "Notify"
@@ -851,7 +782,7 @@ function MyEngine:Notify(Data)
     NotifyTitle.Size = UDim2.new(1, -20, 0, 25)
     NotifyTitle.Position = UDim2.new(0, 10, 0, 10)
     NotifyTitle.BackgroundTransparency = 1
-    NotifyTitle.Text = Data.Title or "通知"
+    NotifyTitle.Text = Data.Title or "Notify"
     NotifyTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
     NotifyTitle.TextSize = 14
     NotifyTitle.Font = Enum.Font.GothamBold
@@ -870,19 +801,18 @@ function MyEngine:Notify(Data)
     NotifyContent.TextWrapped = true
     NotifyContent.Parent = NotifyFrame
     
-    -- アニメーション
     Tween(NotifyFrame, {Position = UDim2.new(1, -10, 1, -90)}, 0.5)
-    
     task.wait(Data.Duration or 3)
-    
     Tween(NotifyFrame, {Position = UDim2.new(1, -10, 1, 0)}, 0.3)
     task.wait(0.3)
     NotifyGui:Destroy()
 end
 
--- ==================== 起動完了 ====================
-print("✅ 俺専用GUI ENGINE - 完全起動完了")
-print("✅ Rayfield互換モード有効")
-print("✅ すべての機能が使用可能")
+-- Rayfieldとしてグローバル登録
+getgenv().Rayfield = MyEngine
+
+print("MY EXCLUSIVE GUI ENGINE - LOADED")
+print("Rayfield Compatible Mode: ENABLED")
+print("All Features: READY")
 
 return MyEngine
