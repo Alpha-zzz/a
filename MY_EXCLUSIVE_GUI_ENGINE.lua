@@ -1,7 +1,8 @@
--- af_hub GUI ENGINE - ULTIMATE V3.2
+-- af_hub GUI ENGINE - ULTIMATE V3.3
 -- Rayfield互換 / 完全日本語 / 一人称視点対応
 -- V3.2: CreateTextInput + CreateColorPicker + :Set()メソッド + CreateLogViewer
 -- V3.2 PATCH: PlayerList / LogViewer / GameInfo に折りたたみ機能追加
+-- V3.3: CreateCollapsibleSection 追加（セクション単位での折りたたみ対応）
 
 local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
@@ -69,15 +70,11 @@ end
 
 -- ================================================================
 --  折りたたみヘルパー（PlayerList / LogViewer / GameInfo 共通）
---  F        : 対象Frame
---  fullH    : 展開時の高さ (px)
---  headerH  : 折りたたみ時の高さ (px)  ← ここだけ表示される
 -- ================================================================
 local function MakeCollapsible(F, fullH, headerH)
     headerH = headerH or 48
     local collapsed = false
 
-    -- ▲▼ ボタン（ヘッダー右端）
     local Btn = Instance.new("TextButton")
     Btn.Size          = UDim2.new(0, 28, 0, 28)
     Btn.Position      = UDim2.new(1, -36, 0, (headerH - 28) / 2)
@@ -88,7 +85,7 @@ local function MakeCollapsible(F, fullH, headerH)
     Btn.TextSize      = 14
     Btn.Font          = Enum.Font.GothamBold
     Btn.AutoButtonColor = false
-    Btn.ZIndex        = 20   -- 他の要素より確実に手前
+    Btn.ZIndex        = 20
     Btn.Parent        = F
     CC(Btn, 6)
     CS(Btn, Color3.fromRGB(42, 42, 58), 1)
@@ -100,7 +97,6 @@ local function MakeCollapsible(F, fullH, headerH)
         TW(Btn, {BackgroundColor3 = Color3.fromRGB(22, 22, 32)}, 0.1)
     end)
 
-    -- ClipsDescendants で折りたたみ時に内容を隠す
     F.ClipsDescendants = true
 
     Btn.MouseButton1Click:Connect(function()
@@ -300,7 +296,7 @@ local function PlayBoot(sg, onDone)
     })
     MkLabel(Panel,{
         Size=UDim2.new(1,-16,0,14),Position=UDim2.new(0,8,1,-18),
-        Text="v3.2  //  "..LocalPlayer.Name,
+        Text="v3.3  //  "..LocalPlayer.Name,
         TextColor3=Color3.fromRGB(28,52,82),TextSize=10,
         Font=Enum.Font.Code,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=222,
     })
@@ -636,755 +632,964 @@ function MyEngine:CreateWindow(Config)
         local Tab={B=TBtn,A=Acc,C=TC,Elements={}}
         table.insert(Window._Tabs,Tab)
 
-        -- ── セクション ────────────────────────────────────────
-        function Tab:CreateSection(n)
-            local f=Instance.new("Frame")
-            f.Size=UDim2.new(1,0,0,26); f.BackgroundTransparency=1; f.Parent=TC
-            MkLabel(f,{
-                Size=UDim2.new(0.65,0,1,0),Position=UDim2.new(0,6,0,0),
-                Text=n,TextColor3=Color3.fromRGB(85,125,175),TextSize=14,
-                Font=Enum.Font.GothamSemibold,
-            })
-            local ln=Instance.new("Frame")
-            ln.Size=UDim2.new(1,-8,0,1); ln.Position=UDim2.new(0,4,1,-1)
-            ln.BackgroundColor3=Color3.fromRGB(28,28,36); ln.BorderSizePixel=0; ln.Parent=f
-        end
+        -- ================================================================
+        --  要素ビルダー（コンテナを引数に取り、全要素を生成して返す）
+        --  ※ Tab直下 / CreateCollapsibleSection 両方で共用
+        -- ================================================================
+        local function buildCreators(container)
+            local Creators = {}
 
-        -- ── ボタン ────────────────────────────────────────────
-        function Tab:CreateButton(Data)
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-            local B=Instance.new("TextButton")
-            B.Size=UDim2.new(1,0,1,0); B.BackgroundTransparency=1
-            B.Text=Data.Name or "ボタン"; B.TextColor3=Color3.fromRGB(235,235,245)
-            B.TextSize=17; B.Font=Enum.Font.SourceSansSemibold; B.Parent=F
-            B.MouseButton1Click:Connect(function()
-                TW(F,{BackgroundColor3=Color3.fromRGB(30,30,38)},0.08)
-                task.delay(0.08,function() TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.12) end)
-                if Data.Callback then pcall(Data.Callback) end
-                AddLog("実行: "..(Data.Name or "?"),"Action")
-            end)
-        end
-
-        -- ── トグル ────────────────────────────────────────────
-        function Tab:CreateToggle(Data)
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-            MkLabel(F,{
-                Size=UDim2.new(1,-72,1,0),Position=UDim2.new(0,14,0,0),
-                Text=Data.Name or "トグル",TextSize=17,Font=Enum.Font.SourceSans,
-            })
-            local Trk=Instance.new("Frame")
-            Trk.Size=UDim2.new(0,48,0,24); Trk.Position=UDim2.new(1,-58,0.5,-12)
-            Trk.BackgroundColor3=Color3.fromRGB(36,36,44); Trk.BorderSizePixel=0
-            Trk.Parent=F; CC(Trk,100)
-            local Cir=Instance.new("Frame")
-            Cir.Size=UDim2.new(0,20,0,20); Cir.Position=UDim2.new(0,2,0.5,-10)
-            Cir.BackgroundColor3=Color3.fromRGB(185,185,200); Cir.BorderSizePixel=0
-            Cir.Parent=Trk; CC(Cir,100)
-            local HitBtn=Instance.new("TextButton")
-            HitBtn.Size=UDim2.new(1,0,1,0); HitBtn.Position=UDim2.new(0,0,0,0)
-            HitBtn.BackgroundTransparency=1; HitBtn.Text=""
-            HitBtn.AutoButtonColor=false; HitBtn.ZIndex=5; HitBtn.Parent=F
-            local val=Data.CurrentValue or false
-            local function ApplyVisual(v, animate)
-                if v then
-                    if animate then TW(Trk,{BackgroundColor3=Color3.fromRGB(42,138,242)},0.18)
-                                     TW(Cir,{Position=UDim2.new(1,-22,0.5,-10)},0.18)
-                    else Trk.BackgroundColor3=Color3.fromRGB(42,138,242)
-                         Cir.Position=UDim2.new(1,-22,0.5,-10) end
-                else
-                    if animate then TW(Trk,{BackgroundColor3=Color3.fromRGB(36,36,44)},0.18)
-                                     TW(Cir,{Position=UDim2.new(0,2,0.5,-10)},0.18)
-                    else Trk.BackgroundColor3=Color3.fromRGB(36,36,44)
-                         Cir.Position=UDim2.new(0,2,0.5,-10) end
-                end
-            end
-            ApplyVisual(val, false)
-            HitBtn.MouseEnter:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.08) end)
-            HitBtn.MouseLeave:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.08) end)
-            HitBtn.MouseButton1Click:Connect(function()
-                val=not val; ApplyVisual(val, true)
-                if Data.Callback then pcall(Data.Callback,val) end
-                MyEngine.Flags[Data.Flag or Data.Name or ""]=val
-                AddLog("トグル: "..(Data.Name or "?").." = "..tostring(val),"Action")
-            end)
-            local Elem={}
-            function Elem:Set(v) val=v; ApplyVisual(val,true)
-                if Data.Callback then pcall(Data.Callback,val) end
-                MyEngine.Flags[Data.Flag or Data.Name or ""]=val
-            end
-            function Elem:Get() return val end
-            return Elem
-        end
-
-        -- ── スライダー ────────────────────────────────────────
-        function Tab:CreateSlider(Data)
-            local Min=Data.Range[1]; local Max=Data.Range[2]
-            local Inc=Data.Increment or 1
-            local cur=math.clamp(Data.CurrentValue or Min,Min,Max)
-            local dr=false
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,54); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-            MkLabel(F,{
-                Size=UDim2.new(1,-90,0,30),Position=UDim2.new(0,14,0,0),
-                Text=Data.Name or "スライダー",TextSize=17,Font=Enum.Font.SourceSans,
-                TextColor3=Color3.fromRGB(220,225,240),
-            })
-            local VL=MkLabel(F,{
-                Size=UDim2.new(0,72,0,30),Position=UDim2.new(1,-80,0,0),
-                Text="",TextColor3=Color3.fromRGB(50,138,220),TextSize=15,
-                Font=Enum.Font.GothamSemibold,TextXAlignment=Enum.TextXAlignment.Right,
-            })
-            local TrkBG=Instance.new("Frame")
-            TrkBG.Size=UDim2.new(1,-28,0,8); TrkBG.Position=UDim2.new(0,14,1,-18)
-            TrkBG.BackgroundColor3=Color3.fromRGB(25,25,30)
-            TrkBG.BorderSizePixel=0; TrkBG.ZIndex=2; TrkBG.Parent=F; CC(TrkBG,100)
-            CS(TrkBG,Color3.fromRGB(40,40,52),1)
-            local Fil=Instance.new("Frame")
-            Fil.Size=UDim2.new(0,0,1,0); Fil.BackgroundColor3=Color3.fromRGB(50,138,220)
-            Fil.BorderSizePixel=0; Fil.ZIndex=3; Fil.Parent=TrkBG; CC(Fil,100)
-            local FilStroke=Instance.new("UIStroke")
-            FilStroke.Color=Color3.fromRGB(58,163,255); FilStroke.Thickness=1.2
-            FilStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; FilStroke.Parent=Fil
-            local Hit=Instance.new("TextButton")
-            Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1
-            Hit.Text=""; Hit.AutoButtonColor=false; Hit.ZIndex=10; Hit.Parent=F
-            local function MouseRatio()
-                local ax=TrkBG.AbsolutePosition.X; local aw=TrkBG.AbsoluteSize.X
-                if aw<=0 then return 0 end
-                return math.clamp((UserInputService:GetMouseLocation().X-ax)/aw,0,1)
-            end
-            local function Upd(v)
-                v=math.clamp(math.floor(v/Inc+0.5)*Inc,Min,Max); cur=v
-                local ratio=(Max==Min) and 0 or (v-Min)/(Max-Min)
-                Fil.Size=UDim2.new(ratio,0,1,0)
-                VL.Text=tostring(v)..(Data.Suffix or "")
-                MyEngine.Flags[Data.Flag or Data.Name or ""]=v
-            end
-            Upd(cur)
-            Hit.InputBegan:Connect(function(i)
-                if i.UserInputType~=Enum.UserInputType.MouseButton1 then return end
-                dr=true; Upd(Min+(Max-Min)*MouseRatio())
-                TW(Fil,{BackgroundColor3=Color3.fromRGB(65,155,255)},0.1)
-                TW(FilStroke,{Color=Color3.fromRGB(90,185,255)},0.1)
-            end)
-            UserInputService.InputChanged:Connect(function(i)
-                if dr and i.UserInputType==Enum.UserInputType.MouseMovement then
-                    Upd(Min+(Max-Min)*MouseRatio())
-                end
-            end)
-            UserInputService.InputEnded:Connect(function(i)
-                if i.UserInputType==Enum.UserInputType.MouseButton1 and dr then
-                    dr=false
-                    TW(Fil,{BackgroundColor3=Color3.fromRGB(50,138,220)},0.15)
-                    TW(FilStroke,{Color=Color3.fromRGB(58,163,255)},0.15)
-                    if Data.Callback then pcall(Data.Callback,cur) end
-                    AddLog((Data.Name or "スライダー").." = "..tostring(cur),"Action")
-                end
-            end)
-            Hit.MouseEnter:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(25,25,30)},0.1) end)
-            Hit.MouseLeave:Connect(function()
-                if not dr then TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.1) end
-            end)
-            local Elem={}
-            function Elem:Set(v) Upd(v); if Data.Callback then pcall(Data.Callback,cur) end end
-            function Elem:Get() return cur end
-            return Elem
-        end
-
-        -- ── ドロップダウン ────────────────────────────────────
-        function Tab:CreateDropdown(Data)
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-            local DB=Instance.new("TextButton")
-            DB.Size=UDim2.new(1,0,1,0); DB.BackgroundTransparency=1
-            DB.Text="  "..(Data.Name or "選択")..":  "..(Data.CurrentOption or "未選択")
-            DB.TextColor3=Color3.fromRGB(235,235,245); DB.TextSize=17
-            DB.Font=Enum.Font.SourceSans; DB.TextXAlignment=Enum.TextXAlignment.Left; DB.Parent=F
-            local Arr=MkLabel(F,{
-                Size=UDim2.new(0,24,1,0),Position=UDim2.new(1,-28,0,0),
-                Text="▾",TextColor3=Color3.fromRGB(95,115,145),TextSize=16,
-                Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Center,
-            })
-            local OC=Instance.new("Frame")
-            OC.Size=UDim2.new(1,0,0,0); OC.Position=UDim2.new(0,0,1,3)
-            OC.BackgroundColor3=Color3.fromRGB(16,16,20); OC.BorderSizePixel=0
-            OC.Visible=false; OC.ZIndex=10; OC.Parent=F; CC(OC,7); CS(OC,Color3.fromRGB(34,34,42),1)
-            Instance.new("UIListLayout").Parent=OC
-            local op=false
-            DB.MouseButton1Click:Connect(function()
-                op=not op; OC.Visible=op
-                if op then
-                    local h=math.min(#(Data.Options or {})*34,185)
-                    TW(OC,{Size=UDim2.new(1,0,0,h)},0.18)
-                    TW(F,{Size=UDim2.new(1,0,0,44+h+4)},0.18); Arr.Text="▴"
-                else
-                    TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
-                    TW(F,{Size=UDim2.new(1,0,0,44)},0.18); Arr.Text="▾"
-                end
-            end)
-            for _,opt in pairs(Data.Options or {}) do
-                local OB=Instance.new("TextButton")
-                OB.Size=UDim2.new(1,0,0,34); OB.BackgroundColor3=Color3.fromRGB(20,20,26)
-                OB.BorderSizePixel=0; OB.Text="  "..opt
-                OB.TextColor3=Color3.fromRGB(195,200,215); OB.TextSize=16
-                OB.Font=Enum.Font.SourceSans; OB.TextXAlignment=Enum.TextXAlignment.Left
-                OB.AutoButtonColor=false; OB.ZIndex=11; OB.Parent=OC
-                OB.MouseEnter:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(28,28,36)},0.08) end)
-                OB.MouseLeave:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.08) end)
-                OB.MouseButton1Click:Connect(function()
-                    DB.Text="  "..(Data.Name or "選択")..":  "..opt
-                    op=false; OC.Visible=false; Arr.Text="▾"
-                    TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
-                    TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
-                    if Data.Callback then pcall(Data.Callback,opt) end
-                    MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
-                end)
-            end
-            local Elem={}
-            function Elem:Set(opt)
-                DB.Text="  "..(Data.Name or "選択")..":  "..opt
-                op=false; OC.Visible=false; Arr.Text="▾"
-                TW(OC,{Size=UDim2.new(1,0,0,0)},0.18); TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
-                if Data.Callback then pcall(Data.Callback,opt) end
-                MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
-            end
-            function Elem:Get() local t=DB.Text:match(":  (.+)$"); return t end
-            return Elem
-        end
-
-        -- ── キーバインド設定 ──────────────────────────────────
-        function Tab:CreateKeybind(Data)
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-            MkLabel(F,{
-                Size=UDim2.new(1,-118,1,0),Position=UDim2.new(0,14,0,0),
-                Text=Data.Name or "キーバインド",TextSize=17,Font=Enum.Font.SourceSans,
-            })
-            local KB=Instance.new("TextButton")
-            KB.Size=UDim2.new(0,102,0,28); KB.Position=UDim2.new(1,-110,0.5,-14)
-            KB.BackgroundColor3=Color3.fromRGB(26,26,36); KB.BorderSizePixel=0
-            KB.Font=Enum.Font.GothamSemibold; KB.TextSize=15
-            KB.TextColor3=Color3.fromRGB(155,200,255); KB.AutoButtonColor=false; KB.Parent=F
-            CC(KB,6); CS(KB,Color3.fromRGB(48,78,130),1)
-            local function KeyName(kc)
-                local s=tostring(kc); return s:match("Enum%.KeyCode%.(.+)") or s
-            end
-            local isMain=(Data.IsToggleKey==true)
-            local curKey=Data.CurrentKey or MyEngine.ToggleKey
-            KB.Text="[ "..KeyName(curKey).." ]"
-            local listening=false; local listenConn=nil; local blinking=false
-            KB.MouseButton1Click:Connect(function()
-                if listening then return end
-                listening=true; blinking=true
-                TW(KB,{BackgroundColor3=Color3.fromRGB(16,16,26)},0.1)
-                TW(KB,{TextColor3=Color3.fromRGB(255,220,55)},0.1)
-                KB.Text="[ ??? ]"
-                task.spawn(function()
-                    while blinking and KB.Parent do
-                        KB.BackgroundTransparency=0; task.wait(0.32)
-                        if blinking then KB.BackgroundTransparency=0.45; task.wait(0.32) end
-                    end
-                    KB.BackgroundTransparency=0
-                end)
-                listenConn=UserInputService.InputBegan:Connect(function(inp)
-                    if not listening then return end
-                    if inp.UserInputType~=Enum.UserInputType.Keyboard then return end
-                    local kc=inp.KeyCode; listening=false; blinking=false
-                    if kc==Enum.KeyCode.Escape then KB.Text="[ "..KeyName(curKey).." ]"
-                    else
-                        curKey=kc; KB.Text="[ "..KeyName(curKey).." ]"
-                        if isMain then MyEngine.ToggleKey=curKey
-                            AddLog("トグルキー変更 → "..KeyName(curKey),"Action")
-                        end
-                        if Data.Callback then pcall(Data.Callback,curKey) end
-                        MyEngine.Flags[Data.Flag or Data.Name or ""]=curKey
-                    end
-                    TW(KB,{BackgroundColor3=Color3.fromRGB(26,26,36),TextColor3=Color3.fromRGB(155,200,255)},0.15)
-                    if listenConn then listenConn:Disconnect(); listenConn=nil end
-                end)
-            end)
-            KB.MouseEnter:Connect(function()
-                if not listening then TW(KB,{BackgroundColor3=Color3.fromRGB(34,34,48)},0.1) end
-            end)
-            KB.MouseLeave:Connect(function()
-                if not listening then TW(KB,{BackgroundColor3=Color3.fromRGB(26,26,36)},0.1) end
-            end)
-        end
-
-        -- ── テキスト入力 ──────────────────────────────────────
-        function Tab:CreateTextInput(Data)
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,70); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-            MkLabel(F,{
-                Size=UDim2.new(1,-20,0,22),Position=UDim2.new(0,14,0,6),
-                Text=Data.Name or "テキスト入力",TextSize=14,Font=Enum.Font.GothamSemibold,
-                TextColor3=Color3.fromRGB(95,115,155),
-            })
-            local TB=Instance.new("TextBox")
-            TB.Size=UDim2.new(1,-18,0,32); TB.Position=UDim2.new(0,9,1,-39)
-            TB.BackgroundColor3=Color3.fromRGB(13,13,18); TB.BorderSizePixel=0
-            TB.PlaceholderText=Data.PlaceholderText or "入力..."
-            TB.PlaceholderColor3=Color3.fromRGB(70,75,95)
-            TB.Text=Data.DefaultValue or ""
-            TB.TextColor3=Color3.fromRGB(220,225,240); TB.TextSize=16
-            TB.Font=Enum.Font.SourceSans; TB.ClearTextOnFocus=false; TB.Parent=F; CC(TB,6)
-            CS(TB,Color3.fromRGB(34,34,52),1)
-            TB.Focused:Connect(function() TW(TB,{BackgroundColor3=Color3.fromRGB(16,16,26)},0.1) end)
-            TB.FocusLost:Connect(function(enter)
-                TW(TB,{BackgroundColor3=Color3.fromRGB(13,13,18)},0.1)
-                if Data.Callback then pcall(Data.Callback,TB.Text,enter) end
-                MyEngine.Flags[Data.Flag or Data.Name or ""]=TB.Text
-                if enter then AddLog("入力確定: "..(Data.Name or "?").." = "..TB.Text,"Action") end
-            end)
-            local Elem={}
-            function Elem:Set(text) TB.Text=text or ""
-                MyEngine.Flags[Data.Flag or Data.Name or ""]=TB.Text
-            end
-            function Elem:Get() return TB.Text end
-            return Elem
-        end
-
-        -- ── カラーピッカー ────────────────────────────────────
-        function Tab:CreateColorPicker(Data)
-            local initCol=Data.Color or Color3.fromRGB(255,85,85)
-            local H,S,V=initCol:ToHSV()
-            local opened=false
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-            MkLabel(F,{
-                Size=UDim2.new(1,-80,1,0),Position=UDim2.new(0,14,0,0),
-                Text=Data.Name or "カラー",TextSize=17,Font=Enum.Font.SourceSans,
-            })
-            local Preview=Instance.new("Frame")
-            Preview.Size=UDim2.new(0,28,0,28); Preview.Position=UDim2.new(1,-68,0.5,-14)
-            Preview.BackgroundColor3=initCol; Preview.BorderSizePixel=0; Preview.Parent=F; CC(Preview,6)
-            CS(Preview,Color3.fromRGB(55,55,70),1)
-            local HexLbl=MkLabel(F,{
-                Size=UDim2.new(0,50,0,20),Position=UDim2.new(1,-118,0.5,-10),
-                Text="",TextSize=11,Font=Enum.Font.Code,
-                TextColor3=Color3.fromRGB(95,115,155),TextXAlignment=Enum.TextXAlignment.Right,
-            })
-            local TogBtn=Instance.new("TextButton")
-            TogBtn.Size=UDim2.new(0,22,0,22); TogBtn.Position=UDim2.new(1,-36,0.5,-11)
-            TogBtn.BackgroundColor3=Color3.fromRGB(28,28,38); TogBtn.BorderSizePixel=0
-            TogBtn.Text="▾"; TogBtn.TextColor3=Color3.fromRGB(155,160,185)
-            TogBtn.TextSize=14; TogBtn.Font=Enum.Font.GothamBold
-            TogBtn.AutoButtonColor=false; TogBtn.Parent=F; CC(TogBtn,6)
-            local Panel=Instance.new("Frame")
-            Panel.Size=UDim2.new(1,0,0,0); Panel.Position=UDim2.new(0,0,1,4)
-            Panel.BackgroundColor3=Color3.fromRGB(15,15,19); Panel.BorderSizePixel=0
-            Panel.Visible=false; Panel.ZIndex=5; Panel.Parent=F; CC(Panel,7)
-            CS(Panel,Color3.fromRGB(34,34,48),1)
-            local BigPrev=Instance.new("Frame")
-            BigPrev.Size=UDim2.new(1,-20,0,46); BigPrev.Position=UDim2.new(0,10,0,10)
-            BigPrev.BackgroundColor3=initCol; BigPrev.BorderSizePixel=0; BigPrev.ZIndex=6; BigPrev.Parent=Panel
-            CC(BigPrev,8); CS(BigPrev,Color3.fromRGB(50,50,70),1.5)
-            MkLabel(BigPrev,{Size=UDim2.new(1,0,1,0),Position=UDim2.new(0,0,0,0),Text="",ZIndex=7})
-            local function MkHsvSlider(label,yPos,initVal,col1,col2)
-                MkLabel(Panel,{
-                    Size=UDim2.new(0,14,0,16),Position=UDim2.new(0,10,0,yPos),
-                    Text=label,TextSize=12,Font=Enum.Font.GothamSemibold,
-                    TextColor3=Color3.fromRGB(95,115,155),ZIndex=6,
+            -- ── セクション ────────────────────────────────────────
+            function Creators:CreateSection(n)
+                local f=Instance.new("Frame")
+                f.Size=UDim2.new(1,0,0,26); f.BackgroundTransparency=1; f.Parent=container
+                MkLabel(f,{
+                    Size=UDim2.new(0.65,0,1,0),Position=UDim2.new(0,6,0,0),
+                    Text=n,TextColor3=Color3.fromRGB(85,125,175),TextSize=14,
+                    Font=Enum.Font.GothamSemibold,
                 })
-                local ValLbl=MkLabel(Panel,{
-                    Size=UDim2.new(0,28,0,16),Position=UDim2.new(1,-34,0,yPos),
-                    Text="",TextSize=11,Font=Enum.Font.Code,
-                    TextColor3=Color3.fromRGB(95,115,155),ZIndex=6,
-                    TextXAlignment=Enum.TextXAlignment.Right,
+                local ln=Instance.new("Frame")
+                ln.Size=UDim2.new(1,-8,0,1); ln.Position=UDim2.new(0,4,1,-1)
+                ln.BackgroundColor3=Color3.fromRGB(28,28,36); ln.BorderSizePixel=0; ln.Parent=f
+            end
+
+            -- ── ラベル ────────────────────────────────────────────
+            function Creators:CreateLabel(text)
+                local f=Instance.new("Frame")
+                f.Size=UDim2.new(1,0,0,28); f.BackgroundTransparency=1; f.Parent=container
+                MkLabel(f,{
+                    Size=UDim2.new(1,-18,1,0),Position=UDim2.new(0,12,0,0),
+                    Text=text or "",TextSize=14,Font=Enum.Font.SourceSans,
+                    TextColor3=Color3.fromRGB(145,150,168),TextWrapped=true,
+                })
+            end
+
+            -- ── パラグラフ ────────────────────────────────────────
+            function Creators:CreateParagraph(Data)
+                local f=Instance.new("Frame")
+                f.Size=UDim2.new(1,0,0,60); f.BackgroundColor3=Color3.fromRGB(18,18,22)
+                f.BorderSizePixel=0; f.Parent=container; CC(f,7); CS(f,Color3.fromRGB(34,34,42),1)
+                MkLabel(f,{
+                    Size=UDim2.new(1,-18,0,22),Position=UDim2.new(0,12,0,6),
+                    Text=Data.Title or "",TextSize=15,Font=Enum.Font.GothamSemibold,
+                    TextColor3=Color3.fromRGB(200,210,230),
+                })
+                local body=MkLabel(f,{
+                    Size=UDim2.new(1,-18,0,30),Position=UDim2.new(0,12,0,30),
+                    Text=Data.Content or "",TextSize=14,Font=Enum.Font.SourceSans,
+                    TextColor3=Color3.fromRGB(140,148,168),TextWrapped=true,
+                })
+                local function resize()
+                    local ts=game:GetService("TextService")
+                    local h=ts:GetTextSize(body.Text,14,Enum.Font.SourceSans,
+                        Vector2.new(body.AbsoluteSize.X,9999)).Y
+                    body.Size=UDim2.new(1,-18,0,h+4)
+                    f.Size=UDim2.new(1,0,0,h+44)
+                end
+                body:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
+                task.defer(resize)
+            end
+
+            -- ── ボタン ────────────────────────────────────────────
+            function Creators:CreateButton(Data)
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+                local B=Instance.new("TextButton")
+                B.Size=UDim2.new(1,0,1,0); B.BackgroundTransparency=1
+                B.Text=Data.Name or "ボタン"; B.TextColor3=Color3.fromRGB(235,235,245)
+                B.TextSize=17; B.Font=Enum.Font.SourceSansSemibold; B.Parent=F
+                B.MouseButton1Click:Connect(function()
+                    TW(F,{BackgroundColor3=Color3.fromRGB(30,30,38)},0.08)
+                    task.delay(0.08,function() TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.12) end)
+                    if Data.Callback then pcall(Data.Callback) end
+                    AddLog("実行: "..(Data.Name or "?"),"Action")
+                end)
+            end
+
+            -- ── トグル ────────────────────────────────────────────
+            function Creators:CreateToggle(Data)
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+                MkLabel(F,{
+                    Size=UDim2.new(1,-72,1,0),Position=UDim2.new(0,14,0,0),
+                    Text=Data.Name or "トグル",TextSize=17,Font=Enum.Font.SourceSans,
+                })
+                local Trk=Instance.new("Frame")
+                Trk.Size=UDim2.new(0,48,0,24); Trk.Position=UDim2.new(1,-58,0.5,-12)
+                Trk.BackgroundColor3=Color3.fromRGB(36,36,44); Trk.BorderSizePixel=0
+                Trk.Parent=F; CC(Trk,100)
+                local Cir=Instance.new("Frame")
+                Cir.Size=UDim2.new(0,20,0,20); Cir.Position=UDim2.new(0,2,0.5,-10)
+                Cir.BackgroundColor3=Color3.fromRGB(185,185,200); Cir.BorderSizePixel=0
+                Cir.Parent=Trk; CC(Cir,100)
+                local HitBtn=Instance.new("TextButton")
+                HitBtn.Size=UDim2.new(1,0,1,0); HitBtn.Position=UDim2.new(0,0,0,0)
+                HitBtn.BackgroundTransparency=1; HitBtn.Text=""
+                HitBtn.AutoButtonColor=false; HitBtn.ZIndex=5; HitBtn.Parent=F
+                local val=Data.CurrentValue or false
+                local function ApplyVisual(v, animate)
+                    if v then
+                        if animate then TW(Trk,{BackgroundColor3=Color3.fromRGB(42,138,242)},0.18)
+                                         TW(Cir,{Position=UDim2.new(1,-22,0.5,-10)},0.18)
+                        else Trk.BackgroundColor3=Color3.fromRGB(42,138,242)
+                             Cir.Position=UDim2.new(1,-22,0.5,-10) end
+                    else
+                        if animate then TW(Trk,{BackgroundColor3=Color3.fromRGB(36,36,44)},0.18)
+                                         TW(Cir,{Position=UDim2.new(0,2,0.5,-10)},0.18)
+                        else Trk.BackgroundColor3=Color3.fromRGB(36,36,44)
+                             Cir.Position=UDim2.new(0,2,0.5,-10) end
+                    end
+                end
+                ApplyVisual(val, false)
+                HitBtn.MouseEnter:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.08) end)
+                HitBtn.MouseLeave:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.08) end)
+                HitBtn.MouseButton1Click:Connect(function()
+                    val=not val; ApplyVisual(val, true)
+                    if Data.Callback then pcall(Data.Callback,val) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""]=val
+                    AddLog("トグル: "..(Data.Name or "?").." = "..tostring(val),"Action")
+                end)
+                local Elem={}
+                function Elem:Set(v) val=v; ApplyVisual(val,true)
+                    if Data.Callback then pcall(Data.Callback,val) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""]=val
+                end
+                function Elem:Get() return val end
+                return Elem
+            end
+
+            -- ── スライダー ────────────────────────────────────────
+            function Creators:CreateSlider(Data)
+                local Min=Data.Range[1]; local Max=Data.Range[2]
+                local Inc=Data.Increment or 1
+                local cur=math.clamp(Data.CurrentValue or Min,Min,Max)
+                local dr=false
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,54); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+                MkLabel(F,{
+                    Size=UDim2.new(1,-90,0,30),Position=UDim2.new(0,14,0,0),
+                    Text=Data.Name or "スライダー",TextSize=17,Font=Enum.Font.SourceSans,
+                    TextColor3=Color3.fromRGB(220,225,240),
+                })
+                local VL=MkLabel(F,{
+                    Size=UDim2.new(0,72,0,30),Position=UDim2.new(1,-80,0,0),
+                    Text="",TextColor3=Color3.fromRGB(50,138,220),TextSize=15,
+                    Font=Enum.Font.GothamSemibold,TextXAlignment=Enum.TextXAlignment.Right,
                 })
                 local TrkBG=Instance.new("Frame")
-                TrkBG.Size=UDim2.new(1,-54,0,8); TrkBG.Position=UDim2.new(0,26,0,yPos+4)
-                TrkBG.BorderSizePixel=0; TrkBG.ZIndex=6; TrkBG.Parent=Panel; CC(TrkBG,100)
-                local Grad=Instance.new("UIGradient")
-                Grad.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,col1),ColorSequenceKeypoint.new(1,col2)}
-                Grad.Parent=TrkBG
-                local Knob=Instance.new("Frame")
-                Knob.Size=UDim2.new(0,14,0,14); Knob.AnchorPoint=Vector2.new(0.5,0.5)
-                Knob.Position=UDim2.new(initVal,0,0.5,0); Knob.BackgroundColor3=Color3.fromRGB(255,255,255)
-                Knob.BorderSizePixel=0; Knob.ZIndex=8; Knob.Parent=TrkBG; CC(Knob,100)
-                CS(Knob,Color3.fromRGB(120,120,140),1)
-                local dr=false
-                TrkBG.InputBegan:Connect(function(i)
-                    if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=true end
+                TrkBG.Size=UDim2.new(1,-28,0,8); TrkBG.Position=UDim2.new(0,14,1,-18)
+                TrkBG.BackgroundColor3=Color3.fromRGB(25,25,30)
+                TrkBG.BorderSizePixel=0; TrkBG.ZIndex=2; TrkBG.Parent=F; CC(TrkBG,100)
+                CS(TrkBG,Color3.fromRGB(40,40,52),1)
+                local Fil=Instance.new("Frame")
+                Fil.Size=UDim2.new(0,0,1,0); Fil.BackgroundColor3=Color3.fromRGB(50,138,220)
+                Fil.BorderSizePixel=0; Fil.ZIndex=3; Fil.Parent=TrkBG; CC(Fil,100)
+                local FilStroke=Instance.new("UIStroke")
+                FilStroke.Color=Color3.fromRGB(58,163,255); FilStroke.Thickness=1.2
+                FilStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; FilStroke.Parent=Fil
+                local Hit=Instance.new("TextButton")
+                Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1
+                Hit.Text=""; Hit.AutoButtonColor=false; Hit.ZIndex=10; Hit.Parent=F
+                local function MouseRatio()
+                    local ax=TrkBG.AbsolutePosition.X; local aw=TrkBG.AbsoluteSize.X
+                    if aw<=0 then return 0 end
+                    return math.clamp((UserInputService:GetMouseLocation().X-ax)/aw,0,1)
+                end
+                local function Upd(v)
+                    v=math.clamp(math.floor(v/Inc+0.5)*Inc,Min,Max); cur=v
+                    local ratio=(Max==Min) and 0 or (v-Min)/(Max-Min)
+                    Fil.Size=UDim2.new(ratio,0,1,0)
+                    VL.Text=tostring(v)..(Data.Suffix or "")
+                    MyEngine.Flags[Data.Flag or Data.Name or ""]=v
+                end
+                Upd(cur)
+                Hit.InputBegan:Connect(function(i)
+                    if i.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+                    dr=true; Upd(Min+(Max-Min)*MouseRatio())
+                    TW(Fil,{BackgroundColor3=Color3.fromRGB(65,155,255)},0.1)
+                    TW(FilStroke,{Color=Color3.fromRGB(90,185,255)},0.1)
+                end)
+                UserInputService.InputChanged:Connect(function(i)
+                    if dr and i.UserInputType==Enum.UserInputType.MouseMovement then
+                        Upd(Min+(Max-Min)*MouseRatio())
+                    end
                 end)
                 UserInputService.InputEnded:Connect(function(i)
-                    if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=false end
-                end)
-                local curVal=initVal
-                RunService.RenderStepped:Connect(function()
-                    if dr and Panel.Visible then
-                        local mx=UserInputService:GetMouseLocation().X
-                        curVal=math.clamp((mx-TrkBG.AbsolutePosition.X)/TrkBG.AbsoluteSize.X,0,1)
-                        Knob.Position=UDim2.new(curVal,0,0.5,0)
-                        ValLbl.Text=tostring(math.floor(curVal*100)).."%"
+                    if i.UserInputType==Enum.UserInputType.MouseButton1 and dr then
+                        dr=false
+                        TW(Fil,{BackgroundColor3=Color3.fromRGB(50,138,220)},0.15)
+                        TW(FilStroke,{Color=Color3.fromRGB(58,163,255)},0.15)
+                        if Data.Callback then pcall(Data.Callback,cur) end
+                        AddLog((Data.Name or "スライダー").." = "..tostring(cur),"Action")
                     end
                 end)
-                ValLbl.Text=tostring(math.floor(initVal*100)).."%"
-                return function() return curVal end, ValLbl, Knob
-            end
-            local GetH,HValLbl,HKnob=MkHsvSlider("H",66,H,Color3.fromRGB(255,0,0),Color3.fromRGB(255,0,0))
-            local GetS,SValLbl,SKnob=MkHsvSlider("S",92,S,Color3.fromRGB(180,180,180),Color3.fromRGB(255,85,85))
-            local GetV,VValLbl,VKnob=MkHsvSlider("V",118,V,Color3.fromRGB(0,0,0),Color3.fromRGB(255,255,255))
-            local HTrkBG=HKnob.Parent
-            local oldGrad=HTrkBG:FindFirstChildOfClass("UIGradient")
-            if oldGrad then oldGrad:Destroy() end
-            local RainbowGrad=Instance.new("UIGradient")
-            RainbowGrad.Color=ColorSequence.new{
-                ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
-                ColorSequenceKeypoint.new(0.17,Color3.fromRGB(255,255,0)),
-                ColorSequenceKeypoint.new(0.33,Color3.fromRGB(0,255,0)),
-                ColorSequenceKeypoint.new(0.50,Color3.fromRGB(0,255,255)),
-                ColorSequenceKeypoint.new(0.67,Color3.fromRGB(0,0,255)),
-                ColorSequenceKeypoint.new(0.83,Color3.fromRGB(255,0,255)),
-                ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0)),
-            }
-            RainbowGrad.Parent=HTrkBG
-            local function ToHex(c)
-                return string.format("#%02X%02X%02X",math.floor(c.R*255),math.floor(c.G*255),math.floor(c.B*255))
-            end
-            local curColor=initCol
-            task.spawn(function()
-                while F.Parent do
-                    if Panel.Visible then
-                        local newH=GetH(); local newS=GetS(); local newV=GetV()
-                        local nc=Color3.fromHSV(newH,newS,newV)
-                        if nc~=curColor then
-                            curColor=nc; Preview.BackgroundColor3=curColor
-                            BigPrev.BackgroundColor3=curColor; HexLbl.Text=ToHex(curColor)
-                            local STrk=SKnob.Parent
-                            local sg=STrk:FindFirstChildOfClass("UIGradient")
-                            if sg then
-                                sg.Color=ColorSequence.new{
-                                    ColorSequenceKeypoint.new(0,Color3.fromHSV(newH,0,newV)),
-                                    ColorSequenceKeypoint.new(1,Color3.fromHSV(newH,1,newV)),
-                                }
-                            end
-                            if Data.Callback then pcall(Data.Callback,curColor) end
-                            MyEngine.Flags[Data.Flag or Data.Name or ""]=curColor
-                        end
-                    end
-                    task.wait(0.05)
-                end
-            end)
-            HexLbl.Text=ToHex(initCol)
-            local PANEL_H=148
-            TogBtn.MouseButton1Click:Connect(function()
-                opened=not opened; Panel.Visible=opened; TogBtn.Text=opened and "▴" or "▾"
-                TW(F,{Size=UDim2.new(1,0,0,opened and 44+PANEL_H+6 or 44)},0.2)
-                if opened then Panel.Size=UDim2.new(1,0,0,PANEL_H) end
-            end)
-            local Elem={}
-            function Elem:Set(color3)
-                curColor=color3; H,S,V=color3:ToHSV()
-                HKnob.Position=UDim2.new(H,0,0.5,0); SKnob.Position=UDim2.new(S,0,0.5,0)
-                VKnob.Position=UDim2.new(V,0,0.5,0)
-                HValLbl.Text=tostring(math.floor(H*100)).."%"
-                SValLbl.Text=tostring(math.floor(S*100)).."%"
-                VValLbl.Text=tostring(math.floor(V*100)).."%"
-                Preview.BackgroundColor3=curColor; BigPrev.BackgroundColor3=curColor
-                HexLbl.Text=ToHex(curColor)
-                if Data.Callback then pcall(Data.Callback,curColor) end
-                MyEngine.Flags[Data.Flag or Data.Name or ""]=curColor
-            end
-            function Elem:Get() return curColor end
-            return Elem
-        end
-
-        -- ================================================================
-        --  ログビューアー ── 折りたたみ対応
-        -- ================================================================
-        function Tab:CreateLogViewer()
-            local FULL_H   = 360
-            local HEADER_H = 48
-
-            local LOG_COLORS={
-                Info=Color3.fromRGB(160,170,190), Action=Color3.fromRGB(70,150,255),
-                Success=Color3.fromRGB(65,210,100), Warning=Color3.fromRGB(240,175,45),
-                Error=Color3.fromRGB(215,70,70),
-            }
-            local LOG_BADGES={Info="INFO",Action="ACT",Success="OK",Warning="WARN",Error="ERR"}
-
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
-
-            -- タイトル（折りたたみボタンとクリアボタンが右に来るので幅を縮める）
-            MkLabel(F,{
-                Size=UDim2.new(1,-130,0,32),Position=UDim2.new(0,14,0,8),
-                Text="ログ",TextSize=18,Font=Enum.Font.SourceSansBold,
-                TextColor3=Color3.fromRGB(255,255,255),
-            })
-
-            -- クリアボタン（折りたたみボタンの左）
-            local ClearBtn=Instance.new("TextButton")
-            ClearBtn.Size=UDim2.new(0,64,0,26); ClearBtn.Position=UDim2.new(1,-114,0,11)
-            ClearBtn.BackgroundColor3=Color3.fromRGB(22,22,30); ClearBtn.BorderSizePixel=0
-            ClearBtn.Text="クリア"; ClearBtn.TextColor3=Color3.fromRGB(180,80,80)
-            ClearBtn.TextSize=14; ClearBtn.Font=Enum.Font.GothamSemibold
-            ClearBtn.AutoButtonColor=false; ClearBtn.ZIndex=10; ClearBtn.Parent=F; CC(ClearBtn,6)
-            CS(ClearBtn,Color3.fromRGB(80,30,30),1)
-            ClearBtn.MouseEnter:Connect(function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(32,18,18)},0.1) end)
-            ClearBtn.MouseLeave:Connect(function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.1) end)
-
-            -- ▲▼ 折りたたみボタン（右端）
-            MakeCollapsible(F, FULL_H, HEADER_H)
-
-            local Sep=Instance.new("Frame")
-            Sep.Size=UDim2.new(1,-24,0,1); Sep.Position=UDim2.new(0,12,0,42)
-            Sep.BackgroundColor3=Color3.fromRGB(28,28,38); Sep.BorderSizePixel=0; Sep.Parent=F
-
-            local SF=Instance.new("ScrollingFrame")
-            SF.Size=UDim2.new(1,-12,0,302); SF.Position=UDim2.new(0,6,0,48)
-            SF.BackgroundTransparency=1; SF.BorderSizePixel=0
-            SF.ScrollBarThickness=3; SF.ScrollBarImageColor3=Color3.fromRGB(55,55,65)
-            SF.ScrollingDirection=Enum.ScrollingDirection.Y; SF.Parent=F
-            local LL=Instance.new("UIListLayout")
-            LL.Padding=UDim.new(0,2); LL.SortOrder=Enum.SortOrder.LayoutOrder; LL.Parent=SF
-            local LP=Instance.new("UIPadding")
-            LP.PaddingTop=UDim.new(0,4); LP.PaddingBottom=UDim.new(0,4)
-            LP.PaddingLeft=UDim.new(0,4); LP.PaddingRight=UDim.new(0,4); LP.Parent=SF
-
-            local function Rebuild()
-                for _,c in pairs(SF:GetChildren()) do
-                    if c:IsA("Frame") then c:Destroy() end
-                end
-                local logs=MyEngine.Logs
-                for i=#logs,math.max(1,#logs-79),-1 do
-                    local log=logs[i]
-                    local col=LOG_COLORS[log.Type] or LOG_COLORS.Info
-                    local badge=LOG_BADGES[log.Type] or "INFO"
-                    local Row=Instance.new("Frame")
-                    Row.Size=UDim2.new(1,0,0,26); Row.BackgroundTransparency=1; Row.Parent=SF
-                    local BadgeF=Instance.new("Frame")
-                    BadgeF.Size=UDim2.new(0,38,0,18); BadgeF.Position=UDim2.new(0,0,0.5,-9)
-                    BadgeF.BackgroundColor3=col; BadgeF.BackgroundTransparency=0.72
-                    BadgeF.BorderSizePixel=0; BadgeF.Parent=Row; CC(BadgeF,4)
-                    MkLabel(BadgeF,{Size=UDim2.new(1,0,1,0),Text=badge,TextSize=10,
-                        Font=Enum.Font.GothamBold,TextColor3=col,TextXAlignment=Enum.TextXAlignment.Center})
-                    MkLabel(Row,{Size=UDim2.new(0,62,1,0),Position=UDim2.new(0,42,0,0),
-                        Text=log.Time,TextSize=11,Font=Enum.Font.Code,TextColor3=Color3.fromRGB(55,65,90)})
-                    MkLabel(Row,{Size=UDim2.new(1,-108,1,0),Position=UDim2.new(0,108,0,0),
-                        Text=log.Message,TextSize=13,Font=Enum.Font.SourceSans,
-                        TextColor3=col,TextTruncate=Enum.TextTruncate.AtEnd})
-                end
-                SF.CanvasSize=UDim2.new(0,0,0,LL.AbsoluteContentSize.Y+8)
-            end
-            Rebuild()
-
-            ClearBtn.MouseButton1Click:Connect(function()
-                MyEngine.Logs={}
-                TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(40,20,20)},0.06)
-                task.delay(0.08,function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.12) end)
-                Rebuild(); AddLog("ログをクリアしました","Info")
-            end)
-
-            local listenId=tostring(tick())
-            LogListeners[listenId]=Rebuild
-            F.AncestryChanged:Connect(function()
-                if not F.Parent then LogListeners[listenId]=nil end
-            end)
-        end
-
-        -- ================================================================
-        --  プレイヤーリスト ── 折りたたみ対応
-        -- ================================================================
-        function Tab:CreatePlayerList(Data)
-            local FULL_H   = 420
-            local HEADER_H = 48
-
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
-
-            -- タイトル（折りたたみボタン分を右にオフセット）
-            MkLabel(F,{
-                Size=UDim2.new(1,-55,0,30),Position=UDim2.new(0,13,0,9),
-                Text=Data.Name or "プレイヤーリスト",TextSize=18,Font=Enum.Font.SourceSansBold,
-                TextColor3=Color3.fromRGB(255,255,255),
-            })
-
-            -- ▲▼ 折りたたみボタン（右端）
-            MakeCollapsible(F, FULL_H, HEADER_H)
-
-            local SB=Instance.new("TextBox")
-            SB.Size=UDim2.new(1,-18,0,34); SB.Position=UDim2.new(0,9,0,44)
-            SB.BackgroundColor3=Color3.fromRGB(10,10,14); SB.BorderSizePixel=0
-            SB.PlaceholderText="プレイヤーを検索..."
-            SB.PlaceholderColor3=Color3.fromRGB(75,80,95); SB.Text=""
-            SB.TextColor3=Color3.fromRGB(255,255,255); SB.TextSize=16
-            SB.Font=Enum.Font.SourceSans; SB.ClearTextOnFocus=false; SB.Parent=F; CC(SB,6)
-            local PS=Instance.new("ScrollingFrame")
-            PS.Size=UDim2.new(1,-16,1,-88); PS.Position=UDim2.new(0,8,0,82)
-            PS.BackgroundTransparency=1; PS.BorderSizePixel=0
-            PS.ScrollBarThickness=3; PS.ScrollBarImageColor3=Color3.fromRGB(55,55,65); PS.Parent=F
-            local PL=Instance.new("UIListLayout"); PL.Padding=UDim.new(0,5); PL.Parent=PS
-            PL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                PS.CanvasSize=UDim2.new(0,0,0,PL.AbsoluteContentSize.Y+8)
-            end)
-            local function MkCard(player)
-                if PS:FindFirstChild("p_"..player.UserId) then return end
-                local Card=Instance.new("Frame")
-                Card.Name="p_"..player.UserId; Card.Size=UDim2.new(1,-4,0,60)
-                Card.BackgroundColor3=Color3.fromRGB(20,20,26); Card.BorderSizePixel=0
-                Card.Parent=PS; CC(Card,7)
-                local Stk=CS(Card,Color3.fromRGB(36,36,46),1.5)
-                local Ico=Instance.new("ImageLabel")
-                Ico.Size=UDim2.new(0,44,0,44); Ico.Position=UDim2.new(0,8,0.5,-22)
-                Ico.BackgroundTransparency=1
-                Ico.Image="rbxthumb://type=AvatarHeadShot&id="..player.UserId.."&w=150&h=150"
-                Ico.Parent=Card; CC(Ico,100)
-                MkLabel(Card,{Size=UDim2.new(1,-66,0,24),Position=UDim2.new(0,58,0.08,0),
-                    Text=player.DisplayName,TextSize=18,Font=Enum.Font.SourceSansBold})
-                MkLabel(Card,{Size=UDim2.new(1,-66,0,17),Position=UDim2.new(0,58,0.60,0),
-                    Text="@"..player.Name,TextSize=14,Font=Enum.Font.SourceSans,
-                    TextColor3=Color3.fromRGB(65,125,195)})
-                local Hit=Instance.new("TextButton")
-                Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1; Hit.Text=""; Hit.Parent=Card
-                Hit.MouseEnter:Connect(function()
-                    if not MyEngine.KillList[player.UserId] then
-                        TW(Card,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.1) end
-                end)
+                Hit.MouseEnter:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(25,25,30)},0.1) end)
                 Hit.MouseLeave:Connect(function()
-                    if not MyEngine.KillList[player.UserId] then
-                        TW(Card,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.1) end
+                    if not dr then TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.1) end
                 end)
-                Hit.MouseButton1Click:Connect(function()
-                    if not MyEngine.KillList[player.UserId] then
-                        MyEngine.KillList[player.UserId]=true; MyEngine.Blacklist[player.UserId]=player.Name
-                        TW(Stk,{Color=Color3.fromRGB(210,48,48)},0.2); Stk.Thickness=2
-                        TW(Card,{BackgroundColor3=Color3.fromRGB(28,16,16)},0.2)
-                        AddLog("キルリスト追加: "..player.Name,"Action")
-                        if Data.Callback then pcall(Data.Callback,player,true) end
+                local Elem={}
+                function Elem:Set(v) Upd(v); if Data.Callback then pcall(Data.Callback,cur) end end
+                function Elem:Get() return cur end
+                return Elem
+            end
+
+            -- ── ドロップダウン ────────────────────────────────────
+            function Creators:CreateDropdown(Data)
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+                local DB=Instance.new("TextButton")
+                DB.Size=UDim2.new(1,0,1,0); DB.BackgroundTransparency=1
+                DB.Text="  "..(Data.Name or "選択")..":  "..(Data.CurrentOption or "未選択")
+                DB.TextColor3=Color3.fromRGB(235,235,245); DB.TextSize=17
+                DB.Font=Enum.Font.SourceSans; DB.TextXAlignment=Enum.TextXAlignment.Left; DB.Parent=F
+                local Arr=MkLabel(F,{
+                    Size=UDim2.new(0,24,1,0),Position=UDim2.new(1,-28,0,0),
+                    Text="▾",TextColor3=Color3.fromRGB(95,115,145),TextSize=16,
+                    Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Center,
+                })
+                local OC=Instance.new("Frame")
+                OC.Size=UDim2.new(1,0,0,0); OC.Position=UDim2.new(0,0,1,3)
+                OC.BackgroundColor3=Color3.fromRGB(16,16,20); OC.BorderSizePixel=0
+                OC.Visible=false; OC.ZIndex=10; OC.Parent=F; CC(OC,7); CS(OC,Color3.fromRGB(34,34,42),1)
+                Instance.new("UIListLayout").Parent=OC
+                local op=false
+                DB.MouseButton1Click:Connect(function()
+                    op=not op; OC.Visible=op
+                    if op then
+                        local h=math.min(#(Data.Options or {})*34,185)
+                        TW(OC,{Size=UDim2.new(1,0,0,h)},0.18)
+                        TW(F,{Size=UDim2.new(1,0,0,44+h+4)},0.18); Arr.Text="▴"
                     else
-                        MyEngine.KillList[player.UserId]=nil; MyEngine.Blacklist[player.UserId]=nil
-                        TW(Stk,{Color=Color3.fromRGB(36,36,46)},0.2); Stk.Thickness=1.5
-                        TW(Card,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.2)
-                        AddLog("キルリスト解除: "..player.Name,"Action")
-                        if Data.Callback then pcall(Data.Callback,player,false) end
+                        TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
+                        TW(F,{Size=UDim2.new(1,0,0,44)},0.18); Arr.Text="▾"
                     end
                 end)
-            end
-            local function Refresh()
-                for _,c in pairs(PS:GetChildren()) do
-                    if c:IsA("Frame") then
-                        local uid=tonumber(c.Name:match("p_(%d+)"))
-                        if uid and not Players:GetPlayerByUserId(uid) then c:Destroy() end
+                for _,opt in pairs(Data.Options or {}) do
+                    local OB=Instance.new("TextButton")
+                    OB.Size=UDim2.new(1,0,0,34); OB.BackgroundColor3=Color3.fromRGB(20,20,26)
+                    OB.BorderSizePixel=0; OB.Text="  "..opt
+                    OB.TextColor3=Color3.fromRGB(195,200,215); OB.TextSize=16
+                    OB.Font=Enum.Font.SourceSans; OB.TextXAlignment=Enum.TextXAlignment.Left
+                    OB.AutoButtonColor=false; OB.ZIndex=11; OB.Parent=OC
+                    OB.MouseEnter:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(28,28,36)},0.08) end)
+                    OB.MouseLeave:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.08) end)
+                    OB.MouseButton1Click:Connect(function()
+                        DB.Text="  "..(Data.Name or "選択")..":  "..opt
+                        op=false; OC.Visible=false; Arr.Text="▾"
+                        TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
+                        TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
+                        if Data.Callback then pcall(Data.Callback,opt) end
+                        MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
+                    end)
+                end
+                local Elem={}
+                function Elem:Set(opt)
+                    DB.Text="  "..(Data.Name or "選択")..":  "..opt
+                    op=false; OC.Visible=false; Arr.Text="▾"
+                    TW(OC,{Size=UDim2.new(1,0,0,0)},0.18); TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
+                    if Data.Callback then pcall(Data.Callback,opt) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
+                end
+                function Elem:Refresh(newOptions)
+                    for _,c in pairs(OC:GetChildren()) do
+                        if c:IsA("TextButton") then c:Destroy() end
+                    end
+                    Data.Options = newOptions
+                    for _,opt in pairs(newOptions or {}) do
+                        local OB=Instance.new("TextButton")
+                        OB.Size=UDim2.new(1,0,0,34); OB.BackgroundColor3=Color3.fromRGB(20,20,26)
+                        OB.BorderSizePixel=0; OB.Text="  "..opt
+                        OB.TextColor3=Color3.fromRGB(195,200,215); OB.TextSize=16
+                        OB.Font=Enum.Font.SourceSans; OB.TextXAlignment=Enum.TextXAlignment.Left
+                        OB.AutoButtonColor=false; OB.ZIndex=11; OB.Parent=OC
+                        OB.MouseEnter:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(28,28,36)},0.08) end)
+                        OB.MouseLeave:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.08) end)
+                        OB.MouseButton1Click:Connect(function()
+                            DB.Text="  "..(Data.Name or "選択")..":  "..opt
+                            op=false; OC.Visible=false; Arr.Text="▾"
+                            TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
+                            TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
+                            if Data.Callback then pcall(Data.Callback,opt) end
+                            MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
+                        end)
                     end
                 end
-                for _,p in pairs(Players:GetPlayers()) do
-                    if p~=LocalPlayer then MkCard(p) end
-                end
+                function Elem:Get() local t=DB.Text:match(":  (.+)$"); return t end
+                return Elem
             end
-            SB:GetPropertyChangedSignal("Text"):Connect(function()
-                local s=SB.Text:lower()
-                for _,c in pairs(PS:GetChildren()) do
-                    if c:IsA("Frame") then
-                        local uid=tonumber(c.Name:match("p_(%d+)"))
-                        if uid then
-                            local p=Players:GetPlayerByUserId(uid)
-                            c.Visible=p and(s=="" or p.DisplayName:lower():find(s,1,true)~=nil
-                                or p.Name:lower():find(s,1,true)~=nil) or false
+
+            -- ── キーバインド設定 ──────────────────────────────────
+            function Creators:CreateKeybind(Data)
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+                MkLabel(F,{
+                    Size=UDim2.new(1,-118,1,0),Position=UDim2.new(0,14,0,0),
+                    Text=Data.Name or "キーバインド",TextSize=17,Font=Enum.Font.SourceSans,
+                })
+                local KB=Instance.new("TextButton")
+                KB.Size=UDim2.new(0,102,0,28); KB.Position=UDim2.new(1,-110,0.5,-14)
+                KB.BackgroundColor3=Color3.fromRGB(26,26,36); KB.BorderSizePixel=0
+                KB.Font=Enum.Font.GothamSemibold; KB.TextSize=15
+                KB.TextColor3=Color3.fromRGB(155,200,255); KB.AutoButtonColor=false; KB.Parent=F
+                CC(KB,6); CS(KB,Color3.fromRGB(48,78,130),1)
+                local function KeyName(kc)
+                    local s=tostring(kc); return s:match("Enum%.KeyCode%.(.+)") or s
+                end
+                local isMain=(Data.IsToggleKey==true)
+                local curKey=Data.CurrentKey or MyEngine.ToggleKey
+                KB.Text="[ "..KeyName(curKey).." ]"
+                local listening=false; local listenConn=nil; local blinking=false
+                KB.MouseButton1Click:Connect(function()
+                    if listening then return end
+                    listening=true; blinking=true
+                    TW(KB,{BackgroundColor3=Color3.fromRGB(16,16,26)},0.1)
+                    TW(KB,{TextColor3=Color3.fromRGB(255,220,55)},0.1)
+                    KB.Text="[ ??? ]"
+                    task.spawn(function()
+                        while blinking and KB.Parent do
+                            KB.BackgroundTransparency=0; task.wait(0.32)
+                            if blinking then KB.BackgroundTransparency=0.45; task.wait(0.32) end
+                        end
+                        KB.BackgroundTransparency=0
+                    end)
+                    listenConn=UserInputService.InputBegan:Connect(function(inp)
+                        if not listening then return end
+                        if inp.UserInputType~=Enum.UserInputType.Keyboard then return end
+                        local kc=inp.KeyCode; listening=false; blinking=false
+                        if kc==Enum.KeyCode.Escape then KB.Text="[ "..KeyName(curKey).." ]"
+                        else
+                            curKey=kc; KB.Text="[ "..KeyName(curKey).." ]"
+                            if isMain then MyEngine.ToggleKey=curKey
+                                AddLog("トグルキー変更 → "..KeyName(curKey),"Action")
+                            end
+                            if Data.Callback then pcall(Data.Callback,curKey) end
+                            MyEngine.Flags[Data.Flag or Data.Name or ""]=curKey
+                        end
+                        TW(KB,{BackgroundColor3=Color3.fromRGB(26,26,36),TextColor3=Color3.fromRGB(155,200,255)},0.15)
+                        if listenConn then listenConn:Disconnect(); listenConn=nil end
+                    end)
+                end)
+                KB.MouseEnter:Connect(function()
+                    if not listening then TW(KB,{BackgroundColor3=Color3.fromRGB(34,34,48)},0.1) end
+                end)
+                KB.MouseLeave:Connect(function()
+                    if not listening then TW(KB,{BackgroundColor3=Color3.fromRGB(26,26,36)},0.1) end
+                end)
+            end
+
+            -- ── テキスト入力 ──────────────────────────────────────
+            function Creators:CreateTextInput(Data)
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,70); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+                MkLabel(F,{
+                    Size=UDim2.new(1,-20,0,22),Position=UDim2.new(0,14,0,6),
+                    Text=Data.Name or "テキスト入力",TextSize=14,Font=Enum.Font.GothamSemibold,
+                    TextColor3=Color3.fromRGB(95,115,155),
+                })
+                local TB=Instance.new("TextBox")
+                TB.Size=UDim2.new(1,-18,0,32); TB.Position=UDim2.new(0,9,1,-39)
+                TB.BackgroundColor3=Color3.fromRGB(13,13,18); TB.BorderSizePixel=0
+                TB.PlaceholderText=Data.PlaceholderText or "入力..."
+                TB.PlaceholderColor3=Color3.fromRGB(70,75,95)
+                TB.Text=Data.DefaultValue or ""
+                TB.TextColor3=Color3.fromRGB(220,225,240); TB.TextSize=16
+                TB.Font=Enum.Font.SourceSans; TB.ClearTextOnFocus=false; TB.Parent=F; CC(TB,6)
+                CS(TB,Color3.fromRGB(34,34,52),1)
+                TB.Focused:Connect(function() TW(TB,{BackgroundColor3=Color3.fromRGB(16,16,26)},0.1) end)
+                TB.FocusLost:Connect(function(enter)
+                    TW(TB,{BackgroundColor3=Color3.fromRGB(13,13,18)},0.1)
+                    if Data.Callback then pcall(Data.Callback,TB.Text,enter) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""]=TB.Text
+                    if enter then AddLog("入力確定: "..(Data.Name or "?").." = "..TB.Text,"Action") end
+                end)
+                local Elem={}
+                function Elem:Set(text) TB.Text=text or ""
+                    MyEngine.Flags[Data.Flag or Data.Name or ""]=TB.Text
+                end
+                function Elem:Get() return TB.Text end
+                return Elem
+            end
+
+            -- ── カラーピッカー ────────────────────────────────────
+            function Creators:CreateColorPicker(Data)
+                local initCol=Data.Color or Color3.fromRGB(255,85,85)
+                local H,S,V=initCol:ToHSV()
+                local opened=false
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
+                MkLabel(F,{
+                    Size=UDim2.new(1,-80,1,0),Position=UDim2.new(0,14,0,0),
+                    Text=Data.Name or "カラー",TextSize=17,Font=Enum.Font.SourceSans,
+                })
+                local Preview=Instance.new("Frame")
+                Preview.Size=UDim2.new(0,28,0,28); Preview.Position=UDim2.new(1,-68,0.5,-14)
+                Preview.BackgroundColor3=initCol; Preview.BorderSizePixel=0; Preview.Parent=F; CC(Preview,6)
+                CS(Preview,Color3.fromRGB(55,55,70),1)
+                local HexLbl=MkLabel(F,{
+                    Size=UDim2.new(0,50,0,20),Position=UDim2.new(1,-118,0.5,-10),
+                    Text="",TextSize=11,Font=Enum.Font.Code,
+                    TextColor3=Color3.fromRGB(95,115,155),TextXAlignment=Enum.TextXAlignment.Right,
+                })
+                local TogBtn=Instance.new("TextButton")
+                TogBtn.Size=UDim2.new(0,22,0,22); TogBtn.Position=UDim2.new(1,-36,0.5,-11)
+                TogBtn.BackgroundColor3=Color3.fromRGB(28,28,38); TogBtn.BorderSizePixel=0
+                TogBtn.Text="▾"; TogBtn.TextColor3=Color3.fromRGB(155,160,185)
+                TogBtn.TextSize=14; TogBtn.Font=Enum.Font.GothamBold
+                TogBtn.AutoButtonColor=false; TogBtn.Parent=F; CC(TogBtn,6)
+                local CPanel=Instance.new("Frame")
+                CPanel.Size=UDim2.new(1,0,0,0); CPanel.Position=UDim2.new(0,0,1,4)
+                CPanel.BackgroundColor3=Color3.fromRGB(15,15,19); CPanel.BorderSizePixel=0
+                CPanel.Visible=false; CPanel.ZIndex=5; CPanel.Parent=F; CC(CPanel,7)
+                CS(CPanel,Color3.fromRGB(34,34,48),1)
+                local BigPrev=Instance.new("Frame")
+                BigPrev.Size=UDim2.new(1,-20,0,46); BigPrev.Position=UDim2.new(0,10,0,10)
+                BigPrev.BackgroundColor3=initCol; BigPrev.BorderSizePixel=0; BigPrev.ZIndex=6; BigPrev.Parent=CPanel
+                CC(BigPrev,8); CS(BigPrev,Color3.fromRGB(50,50,70),1.5)
+                local function MkHsvSlider(label,yPos,initVal,col1,col2)
+                    MkLabel(CPanel,{
+                        Size=UDim2.new(0,14,0,16),Position=UDim2.new(0,10,0,yPos),
+                        Text=label,TextSize=12,Font=Enum.Font.GothamSemibold,
+                        TextColor3=Color3.fromRGB(95,115,155),ZIndex=6,
+                    })
+                    local ValLbl=MkLabel(CPanel,{
+                        Size=UDim2.new(0,28,0,16),Position=UDim2.new(1,-34,0,yPos),
+                        Text="",TextSize=11,Font=Enum.Font.Code,
+                        TextColor3=Color3.fromRGB(95,115,155),ZIndex=6,
+                        TextXAlignment=Enum.TextXAlignment.Right,
+                    })
+                    local TrkBG2=Instance.new("Frame")
+                    TrkBG2.Size=UDim2.new(1,-54,0,8); TrkBG2.Position=UDim2.new(0,26,0,yPos+4)
+                    TrkBG2.BorderSizePixel=0; TrkBG2.ZIndex=6; TrkBG2.Parent=CPanel; CC(TrkBG2,100)
+                    local Grad2=Instance.new("UIGradient")
+                    Grad2.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,col1),ColorSequenceKeypoint.new(1,col2)}
+                    Grad2.Parent=TrkBG2
+                    local Knob=Instance.new("Frame")
+                    Knob.Size=UDim2.new(0,14,0,14); Knob.AnchorPoint=Vector2.new(0.5,0.5)
+                    Knob.Position=UDim2.new(initVal,0,0.5,0); Knob.BackgroundColor3=Color3.fromRGB(255,255,255)
+                    Knob.BorderSizePixel=0; Knob.ZIndex=8; Knob.Parent=TrkBG2; CC(Knob,100)
+                    CS(Knob,Color3.fromRGB(120,120,140),1)
+                    local dr2=false
+                    TrkBG2.InputBegan:Connect(function(i)
+                        if i.UserInputType==Enum.UserInputType.MouseButton1 then dr2=true end
+                    end)
+                    UserInputService.InputEnded:Connect(function(i)
+                        if i.UserInputType==Enum.UserInputType.MouseButton1 then dr2=false end
+                    end)
+                    local curVal=initVal
+                    RunService.RenderStepped:Connect(function()
+                        if dr2 and CPanel.Visible then
+                            local mx=UserInputService:GetMouseLocation().X
+                            curVal=math.clamp((mx-TrkBG2.AbsolutePosition.X)/TrkBG2.AbsoluteSize.X,0,1)
+                            Knob.Position=UDim2.new(curVal,0,0.5,0)
+                            ValLbl.Text=tostring(math.floor(curVal*100)).."%"
+                        end
+                    end)
+                    ValLbl.Text=tostring(math.floor(initVal*100)).."%"
+                    return function() return curVal end, ValLbl, Knob
+                end
+                local GetH,HValLbl,HKnob=MkHsvSlider("H",66,H,Color3.fromRGB(255,0,0),Color3.fromRGB(255,0,0))
+                local GetS,SValLbl,SKnob=MkHsvSlider("S",92,S,Color3.fromRGB(180,180,180),Color3.fromRGB(255,85,85))
+                local GetV,VValLbl,VKnob=MkHsvSlider("V",118,V,Color3.fromRGB(0,0,0),Color3.fromRGB(255,255,255))
+                local HTrkBG=HKnob.Parent
+                local oldGrad=HTrkBG:FindFirstChildOfClass("UIGradient")
+                if oldGrad then oldGrad:Destroy() end
+                local RainbowGrad=Instance.new("UIGradient")
+                RainbowGrad.Color=ColorSequence.new{
+                    ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+                    ColorSequenceKeypoint.new(0.17,Color3.fromRGB(255,255,0)),
+                    ColorSequenceKeypoint.new(0.33,Color3.fromRGB(0,255,0)),
+                    ColorSequenceKeypoint.new(0.50,Color3.fromRGB(0,255,255)),
+                    ColorSequenceKeypoint.new(0.67,Color3.fromRGB(0,0,255)),
+                    ColorSequenceKeypoint.new(0.83,Color3.fromRGB(255,0,255)),
+                    ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0)),
+                }
+                RainbowGrad.Parent=HTrkBG
+                local function ToHex(c)
+                    return string.format("#%02X%02X%02X",math.floor(c.R*255),math.floor(c.G*255),math.floor(c.B*255))
+                end
+                local curColor=initCol
+                task.spawn(function()
+                    while F.Parent do
+                        if CPanel.Visible then
+                            local newH=GetH(); local newS=GetS(); local newV=GetV()
+                            local nc=Color3.fromHSV(newH,newS,newV)
+                            if nc~=curColor then
+                                curColor=nc; Preview.BackgroundColor3=curColor
+                                BigPrev.BackgroundColor3=curColor; HexLbl.Text=ToHex(curColor)
+                                local STrk=SKnob.Parent
+                                local sg2=STrk:FindFirstChildOfClass("UIGradient")
+                                if sg2 then
+                                    sg2.Color=ColorSequence.new{
+                                        ColorSequenceKeypoint.new(0,Color3.fromHSV(newH,0,newV)),
+                                        ColorSequenceKeypoint.new(1,Color3.fromHSV(newH,1,newV)),
+                                    }
+                                end
+                                if Data.Callback then pcall(Data.Callback,curColor) end
+                                MyEngine.Flags[Data.Flag or Data.Name or ""]=curColor
+                            end
+                        end
+                        task.wait(0.05)
+                    end
+                end)
+                HexLbl.Text=ToHex(initCol)
+                local PANEL_H=148
+                TogBtn.MouseButton1Click:Connect(function()
+                    opened=not opened; CPanel.Visible=opened; TogBtn.Text=opened and "▴" or "▾"
+                    TW(F,{Size=UDim2.new(1,0,0,opened and 44+PANEL_H+6 or 44)},0.2)
+                    if opened then CPanel.Size=UDim2.new(1,0,0,PANEL_H) end
+                end)
+                local Elem={}
+                function Elem:Set(color3)
+                    curColor=color3; H,S,V=color3:ToHSV()
+                    HKnob.Position=UDim2.new(H,0,0.5,0); SKnob.Position=UDim2.new(S,0,0.5,0)
+                    VKnob.Position=UDim2.new(V,0,0.5,0)
+                    HValLbl.Text=tostring(math.floor(H*100)).."%"
+                    SValLbl.Text=tostring(math.floor(S*100)).."%"
+                    VValLbl.Text=tostring(math.floor(V*100)).."%"
+                    Preview.BackgroundColor3=curColor; BigPrev.BackgroundColor3=curColor
+                    HexLbl.Text=ToHex(curColor)
+                    if Data.Callback then pcall(Data.Callback,curColor) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""]=curColor
+                end
+                function Elem:Get() return curColor end
+                return Elem
+            end
+
+            -- ================================================================
+            --  【V3.3 NEW】折りたたみセクション
+            --  使い方: local Sec = Tab:CreateCollapsibleSection("セクション名")
+            --          Sec:CreateToggle({...})  ← Tab と全く同じ API
+            -- ================================================================
+            function Creators:CreateCollapsibleSection(sectionName)
+                local HEADER_H = 40
+
+                -- 外枠フレーム（折りたたみで高さが変わる）
+                local Outer = Instance.new("Frame")
+                Outer.Size = UDim2.new(1, 0, 0, HEADER_H)
+                Outer.BackgroundColor3 = Color3.fromRGB(13, 13, 17)
+                Outer.BorderSizePixel = 0
+                Outer.ClipsDescendants = true
+                Outer.Parent = container
+                CC(Outer, 8)
+                CS(Outer, Color3.fromRGB(38, 50, 75), 1.5)
+
+                -- ヘッダーグラデーション
+                local HdrGrad = Instance.new("UIGradient")
+                HdrGrad.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 22, 32)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(13, 13, 17)),
+                }
+                HdrGrad.Rotation = 90
+                HdrGrad.Parent = Outer
+
+                -- 左アクセントライン
+                local AccLine = Instance.new("Frame")
+                AccLine.Size = UDim2.new(0, 3, 0, 24)
+                AccLine.Position = UDim2.new(0, 0, 0, (HEADER_H - 24) / 2)
+                AccLine.BackgroundColor3 = Color3.fromRGB(50, 130, 255)
+                AccLine.BorderSizePixel = 0
+                AccLine.Parent = Outer
+                CC(AccLine, 2)
+
+                -- ヘッダーボタン（クリックで開閉）
+                local HeaderBtn = Instance.new("TextButton")
+                HeaderBtn.Size = UDim2.new(1, 0, 0, HEADER_H)
+                HeaderBtn.BackgroundTransparency = 1
+                HeaderBtn.Text = "  " .. (sectionName or "セクション")
+                HeaderBtn.TextColor3 = Color3.fromRGB(110, 160, 235)
+                HeaderBtn.TextSize = 15
+                HeaderBtn.Font = Enum.Font.GothamSemibold
+                HeaderBtn.TextXAlignment = Enum.TextXAlignment.Left
+                HeaderBtn.AutoButtonColor = false
+                HeaderBtn.ZIndex = 5
+                HeaderBtn.Parent = Outer
+
+                -- 矢印アイコン
+                local Arrow = MkLabel(Outer, {
+                    Size = UDim2.new(0, 28, 0, HEADER_H),
+                    Position = UDim2.new(1, -32, 0, 0),
+                    Text = "▶",
+                    TextColor3 = Color3.fromRGB(70, 110, 180),
+                    TextSize = 13,
+                    Font = Enum.Font.GothamBold,
+                    TextXAlignment = Enum.TextXAlignment.Center,
+                    ZIndex = 6,
+                })
+
+                -- 区切りライン
+                local Sep = Instance.new("Frame")
+                Sep.Size = UDim2.new(1, -12, 0, 1)
+                Sep.Position = UDim2.new(0, 6, 0, HEADER_H - 1)
+                Sep.BackgroundColor3 = Color3.fromRGB(32, 42, 65)
+                Sep.BorderSizePixel = 0
+                Sep.Parent = Outer
+
+                -- コンテンツエリア
+                local Inner = Instance.new("Frame")
+                Inner.Name = "_SecInner"
+                Inner.Size = UDim2.new(1, 0, 0, 0)
+                Inner.Position = UDim2.new(0, 0, 0, HEADER_H + 1)
+                Inner.BackgroundTransparency = 1
+                Inner.BorderSizePixel = 0
+                Inner.Parent = Outer
+
+                local IL = Instance.new("UIListLayout")
+                IL.Padding = UDim.new(0, 6)
+                IL.SortOrder = Enum.SortOrder.LayoutOrder
+                IL.Parent = Inner
+
+                local IP = Instance.new("UIPadding")
+                IP.PaddingTop = UDim.new(0, 6)
+                IP.PaddingBottom = UDim.new(0, 10)
+                IP.PaddingLeft = UDim.new(0, 4)
+                IP.PaddingRight = UDim.new(0, 4)
+                IP.Parent = Inner
+
+                local expanded = false  -- デフォルト折りたたみ
+
+                local function getContentH()
+                    return IL.AbsoluteContentSize.Y + 16
+                end
+
+                local function getFullH()
+                    return HEADER_H + 1 + getContentH()
+                end
+
+                -- コンテンツ変化時に高さを更新
+                IL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                    Inner.Size = UDim2.new(1, 0, 0, getContentH())
+                    if expanded then
+                        Outer.Size = UDim2.new(1, 0, 0, getFullH())
+                    end
+                end)
+
+                HeaderBtn.MouseEnter:Connect(function()
+                    TW(HeaderBtn, {TextColor3 = Color3.fromRGB(145, 195, 255)}, 0.1)
+                    TW(AccLine, {BackgroundColor3 = Color3.fromRGB(75, 165, 255)}, 0.1)
+                end)
+                HeaderBtn.MouseLeave:Connect(function()
+                    TW(HeaderBtn, {TextColor3 = Color3.fromRGB(110, 160, 235)}, 0.1)
+                    TW(AccLine, {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.1)
+                end)
+
+                HeaderBtn.MouseButton1Click:Connect(function()
+                    expanded = not expanded
+                    if expanded then
+                        -- 展開
+                        Arrow.Text = "▼"
+                        TW(AccLine, {BackgroundColor3 = Color3.fromRGB(95, 195, 255)}, 0.15)
+                        TW(Outer, {Size = UDim2.new(1, 0, 0, getFullH())},
+                            0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                        TW(CS(Outer, Color3.fromRGB(55, 130, 225), 1.5), {}, 0)
+                    else
+                        -- 折りたたみ
+                        Arrow.Text = "▶"
+                        TW(AccLine, {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.15)
+                        TW(Outer, {Size = UDim2.new(1, 0, 0, HEADER_H)},
+                            0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+                        TW(CS(Outer, Color3.fromRGB(38, 50, 75), 1.5), {}, 0)
+                    end
+                end)
+
+                -- Inner を container として再帰的にビルダーを返す
+                return buildCreators(Inner)
+            end
+
+            -- ================================================================
+            --  ログビューアー ── 折りたたみ対応
+            -- ================================================================
+            function Creators:CreateLogViewer()
+                local FULL_H   = 360
+                local HEADER_H = 48
+
+                local LOG_COLORS={
+                    Info=Color3.fromRGB(160,170,190), Action=Color3.fromRGB(70,150,255),
+                    Success=Color3.fromRGB(65,210,100), Warning=Color3.fromRGB(240,175,45),
+                    Error=Color3.fromRGB(215,70,70),
+                }
+                local LOG_BADGES={Info="INFO",Action="ACT",Success="OK",Warning="WARN",Error="ERR"}
+
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
+
+                MkLabel(F,{
+                    Size=UDim2.new(1,-130,0,32),Position=UDim2.new(0,14,0,8),
+                    Text="ログ",TextSize=18,Font=Enum.Font.SourceSansBold,
+                    TextColor3=Color3.fromRGB(255,255,255),
+                })
+
+                local ClearBtn=Instance.new("TextButton")
+                ClearBtn.Size=UDim2.new(0,64,0,26); ClearBtn.Position=UDim2.new(1,-114,0,11)
+                ClearBtn.BackgroundColor3=Color3.fromRGB(22,22,30); ClearBtn.BorderSizePixel=0
+                ClearBtn.Text="クリア"; ClearBtn.TextColor3=Color3.fromRGB(180,80,80)
+                ClearBtn.TextSize=14; ClearBtn.Font=Enum.Font.GothamSemibold
+                ClearBtn.AutoButtonColor=false; ClearBtn.ZIndex=10; ClearBtn.Parent=F; CC(ClearBtn,6)
+                CS(ClearBtn,Color3.fromRGB(80,30,30),1)
+                ClearBtn.MouseEnter:Connect(function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(32,18,18)},0.1) end)
+                ClearBtn.MouseLeave:Connect(function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.1) end)
+
+                MakeCollapsible(F, FULL_H, HEADER_H)
+
+                local Sep=Instance.new("Frame")
+                Sep.Size=UDim2.new(1,-24,0,1); Sep.Position=UDim2.new(0,12,0,42)
+                Sep.BackgroundColor3=Color3.fromRGB(28,28,38); Sep.BorderSizePixel=0; Sep.Parent=F
+
+                local SF=Instance.new("ScrollingFrame")
+                SF.Size=UDim2.new(1,-12,0,302); SF.Position=UDim2.new(0,6,0,48)
+                SF.BackgroundTransparency=1; SF.BorderSizePixel=0
+                SF.ScrollBarThickness=3; SF.ScrollBarImageColor3=Color3.fromRGB(55,55,65)
+                SF.ScrollingDirection=Enum.ScrollingDirection.Y; SF.Parent=F
+                local LL=Instance.new("UIListLayout")
+                LL.Padding=UDim.new(0,2); LL.SortOrder=Enum.SortOrder.LayoutOrder; LL.Parent=SF
+                local LP2=Instance.new("UIPadding")
+                LP2.PaddingTop=UDim.new(0,4); LP2.PaddingBottom=UDim.new(0,4)
+                LP2.PaddingLeft=UDim.new(0,4); LP2.PaddingRight=UDim.new(0,4); LP2.Parent=SF
+
+                local function Rebuild()
+                    for _,c in pairs(SF:GetChildren()) do
+                        if c:IsA("Frame") then c:Destroy() end
+                    end
+                    local logs=MyEngine.Logs
+                    for i=#logs,math.max(1,#logs-79),-1 do
+                        local log=logs[i]
+                        local col=LOG_COLORS[log.Type] or LOG_COLORS.Info
+                        local badge=LOG_BADGES[log.Type] or "INFO"
+                        local Row=Instance.new("Frame")
+                        Row.Size=UDim2.new(1,0,0,26); Row.BackgroundTransparency=1; Row.Parent=SF
+                        local BadgeF=Instance.new("Frame")
+                        BadgeF.Size=UDim2.new(0,38,0,18); BadgeF.Position=UDim2.new(0,0,0.5,-9)
+                        BadgeF.BackgroundColor3=col; BadgeF.BackgroundTransparency=0.72
+                        BadgeF.BorderSizePixel=0; BadgeF.Parent=Row; CC(BadgeF,4)
+                        MkLabel(BadgeF,{Size=UDim2.new(1,0,1,0),Text=badge,TextSize=10,
+                            Font=Enum.Font.GothamBold,TextColor3=col,TextXAlignment=Enum.TextXAlignment.Center})
+                        MkLabel(Row,{Size=UDim2.new(0,62,1,0),Position=UDim2.new(0,42,0,0),
+                            Text=log.Time,TextSize=11,Font=Enum.Font.Code,TextColor3=Color3.fromRGB(55,65,90)})
+                        MkLabel(Row,{Size=UDim2.new(1,-108,1,0),Position=UDim2.new(0,108,0,0),
+                            Text=log.Message,TextSize=13,Font=Enum.Font.SourceSans,
+                            TextColor3=col,TextTruncate=Enum.TextTruncate.AtEnd})
+                    end
+                    SF.CanvasSize=UDim2.new(0,0,0,LL.AbsoluteContentSize.Y+8)
+                end
+                Rebuild()
+
+                ClearBtn.MouseButton1Click:Connect(function()
+                    MyEngine.Logs={}
+                    TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(40,20,20)},0.06)
+                    task.delay(0.08,function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.12) end)
+                    Rebuild(); AddLog("ログをクリアしました","Info")
+                end)
+
+                local listenId=tostring(tick())
+                LogListeners[listenId]=Rebuild
+                F.AncestryChanged:Connect(function()
+                    if not F.Parent then LogListeners[listenId]=nil end
+                end)
+            end
+
+            -- ================================================================
+            --  プレイヤーリスト ── 折りたたみ対応
+            -- ================================================================
+            function Creators:CreatePlayerList(Data)
+                local FULL_H   = 420
+                local HEADER_H = 48
+
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
+
+                MkLabel(F,{
+                    Size=UDim2.new(1,-55,0,30),Position=UDim2.new(0,13,0,9),
+                    Text=Data.Name or "プレイヤーリスト",TextSize=18,Font=Enum.Font.SourceSansBold,
+                    TextColor3=Color3.fromRGB(255,255,255),
+                })
+
+                MakeCollapsible(F, FULL_H, HEADER_H)
+
+                local SB=Instance.new("TextBox")
+                SB.Size=UDim2.new(1,-18,0,34); SB.Position=UDim2.new(0,9,0,44)
+                SB.BackgroundColor3=Color3.fromRGB(10,10,14); SB.BorderSizePixel=0
+                SB.PlaceholderText="プレイヤーを検索..."
+                SB.PlaceholderColor3=Color3.fromRGB(75,80,95); SB.Text=""
+                SB.TextColor3=Color3.fromRGB(255,255,255); SB.TextSize=16
+                SB.Font=Enum.Font.SourceSans; SB.ClearTextOnFocus=false; SB.Parent=F; CC(SB,6)
+                local PS=Instance.new("ScrollingFrame")
+                PS.Size=UDim2.new(1,-16,1,-88); PS.Position=UDim2.new(0,8,0,82)
+                PS.BackgroundTransparency=1; PS.BorderSizePixel=0
+                PS.ScrollBarThickness=3; PS.ScrollBarImageColor3=Color3.fromRGB(55,55,65); PS.Parent=F
+                local PL=Instance.new("UIListLayout"); PL.Padding=UDim.new(0,5); PL.Parent=PS
+                PL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                    PS.CanvasSize=UDim2.new(0,0,0,PL.AbsoluteContentSize.Y+8)
+                end)
+                local function MkCard(player)
+                    if PS:FindFirstChild("p_"..player.UserId) then return end
+                    local Card=Instance.new("Frame")
+                    Card.Name="p_"..player.UserId; Card.Size=UDim2.new(1,-4,0,60)
+                    Card.BackgroundColor3=Color3.fromRGB(20,20,26); Card.BorderSizePixel=0
+                    Card.Parent=PS; CC(Card,7)
+                    local Stk=CS(Card,Color3.fromRGB(36,36,46),1.5)
+                    local Ico=Instance.new("ImageLabel")
+                    Ico.Size=UDim2.new(0,44,0,44); Ico.Position=UDim2.new(0,8,0.5,-22)
+                    Ico.BackgroundTransparency=1
+                    Ico.Image="rbxthumb://type=AvatarHeadShot&id="..player.UserId.."&w=150&h=150"
+                    Ico.Parent=Card; CC(Ico,100)
+                    MkLabel(Card,{Size=UDim2.new(1,-66,0,24),Position=UDim2.new(0,58,0.08,0),
+                        Text=player.DisplayName,TextSize=18,Font=Enum.Font.SourceSansBold})
+                    MkLabel(Card,{Size=UDim2.new(1,-66,0,17),Position=UDim2.new(0,58,0.60,0),
+                        Text="@"..player.Name,TextSize=14,Font=Enum.Font.SourceSans,
+                        TextColor3=Color3.fromRGB(65,125,195)})
+                    local Hit=Instance.new("TextButton")
+                    Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1; Hit.Text=""; Hit.Parent=Card
+                    Hit.MouseEnter:Connect(function()
+                        if not MyEngine.KillList[player.UserId] then
+                            TW(Card,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.1) end
+                    end)
+                    Hit.MouseLeave:Connect(function()
+                        if not MyEngine.KillList[player.UserId] then
+                            TW(Card,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.1) end
+                    end)
+                    Hit.MouseButton1Click:Connect(function()
+                        if not MyEngine.KillList[player.UserId] then
+                            MyEngine.KillList[player.UserId]=true; MyEngine.Blacklist[player.UserId]=player.Name
+                            TW(Stk,{Color=Color3.fromRGB(210,48,48)},0.2); Stk.Thickness=2
+                            TW(Card,{BackgroundColor3=Color3.fromRGB(28,16,16)},0.2)
+                            AddLog("キルリスト追加: "..player.Name,"Action")
+                            if Data.Callback then pcall(Data.Callback,player,true) end
+                        else
+                            MyEngine.KillList[player.UserId]=nil; MyEngine.Blacklist[player.UserId]=nil
+                            TW(Stk,{Color=Color3.fromRGB(36,36,46)},0.2); Stk.Thickness=1.5
+                            TW(Card,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.2)
+                            AddLog("キルリスト解除: "..player.Name,"Action")
+                            if Data.Callback then pcall(Data.Callback,player,false) end
+                        end
+                    end)
+                end
+                local function Refresh()
+                    for _,c in pairs(PS:GetChildren()) do
+                        if c:IsA("Frame") then
+                            local uid=tonumber(c.Name:match("p_(%d+)"))
+                            if uid and not Players:GetPlayerByUserId(uid) then c:Destroy() end
                         end
                     end
-                end
-            end)
-            Players.PlayerAdded:Connect(function(p)
-                task.wait(0.5); Refresh()
-                if MyEngine.Blacklist[p.UserId] then
-                    AddLog("ターゲット再参加: "..p.Name,"Warning")
-                    MyEngine.KillList[p.UserId]=true; task.wait(0.5); Refresh()
-                    local c=PS:FindFirstChild("p_"..p.UserId)
-                    if c then
-                        local s=c:FindFirstChildOfClass("UIStroke")
-                        if s then s.Color=Color3.fromRGB(210,48,48); s.Thickness=2 end
-                        TW(c,{BackgroundColor3=Color3.fromRGB(28,16,16)},0.2)
+                    for _,p in pairs(Players:GetPlayers()) do
+                        if p~=LocalPlayer then MkCard(p) end
                     end
                 end
-            end)
-            Players.PlayerRemoving:Connect(function() task.wait(0.5); Refresh() end)
-            Refresh()
-        end
-
-        -- ================================================================
-        --  ゲーム情報 ── 折りたたみ対応
-        -- ================================================================
-        function Tab:CreateGameInfo()
-            local FULL_H   = 300
-            local HEADER_H = 48
-
-            local F=Instance.new("Frame")
-            F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
-            F.BorderSizePixel=0; F.Parent=TC; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
-
-            -- タイトル
-            MkLabel(F,{
-                Size=UDim2.new(1,-55,0,30),Position=UDim2.new(0,14,0,9),
-                Text="サーバー情報",TextSize=18,Font=Enum.Font.SourceSansBold,
-                TextColor3=Color3.fromRGB(255,255,255),
-            })
-
-            -- ▲▼ 折りたたみボタン（右端）
-            MakeCollapsible(F, FULL_H, HEADER_H)
-
-            local Sep=Instance.new("Frame")
-            Sep.Size=UDim2.new(1,-24,0,1); Sep.Position=UDim2.new(0,12,0,40)
-            Sep.BackgroundColor3=Color3.fromRGB(28,28,38); Sep.BorderSizePixel=0; Sep.Parent=F
-            local function Row(lbl,y)
-                MkLabel(F,{Size=UDim2.new(0.42,-4,0,26),Position=UDim2.new(0,16,0,y),
-                    Text=lbl,TextSize=15,Font=Enum.Font.GothamSemibold,
-                    TextColor3=Color3.fromRGB(95,115,155)})
-                local v=MkLabel(F,{Size=UDim2.new(0.58,-4,0,26),Position=UDim2.new(0.42,0,0,y),
-                    Text="…",TextSize=15,Font=Enum.Font.SourceSans,
-                    TextColor3=Color3.fromRGB(200,210,230)})
-                return v
-            end
-            local vSrv  = Row("サーバーID",   46)
-            local vPly  = Row("プレイヤー数",  74)
-            local vPing = Row("Ping",         102)
-            local vFPS  = Row("FPS",          130)
-            local vUp   = Row("稼働時間",     158)
-            local vGame = Row("ゲーム名",     186)
-            local vPID  = Row("PlaceID",      214)
-            local vMe   = Row("自分のUserId",  242)
-            pcall(function()
-                local jid=tostring(game.JobId)
-                vSrv.Text=jid~="" and (jid:sub(1,18).."...") or "ローカル"
-                vGame.Text=tostring(game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
-            end)
-            pcall(function() vPID.Text=tostring(game.PlaceId) end)
-            pcall(function() vMe.Text=tostring(LocalPlayer.UserId) end)
-            local startT=tick(); local lastPing=0
-            local function UpdLive()
-                pcall(function()
-                    lastPing=math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+                SB:GetPropertyChangedSignal("Text"):Connect(function()
+                    local s=SB.Text:lower()
+                    for _,c in pairs(PS:GetChildren()) do
+                        if c:IsA("Frame") then
+                            local uid=tonumber(c.Name:match("p_(%d+)"))
+                            if uid then
+                                local p=Players:GetPlayerByUserId(uid)
+                                c.Visible=p and(s=="" or p.DisplayName:lower():find(s,1,true)~=nil
+                                    or p.Name:lower():find(s,1,true)~=nil) or false
+                            end
+                        end
+                    end
                 end)
-                local pc=Color3.fromRGB(65,210,100)
-                if lastPing>300 then pc=Color3.fromRGB(215,70,70)
-                elseif lastPing>150 then pc=Color3.fromRGB(240,175,45) end
-                vPing.Text=lastPing.." ms"; vPing.TextColor3=pc
-                local fps=0
-                pcall(function()
-                    local s=tick(); RunService.RenderStepped:Wait(); fps=math.floor(1/(tick()-s))
+                Players.PlayerAdded:Connect(function(p)
+                    task.wait(0.5); Refresh()
+                    if MyEngine.Blacklist[p.UserId] then
+                        AddLog("ターゲット再参加: "..p.Name,"Warning")
+                        MyEngine.KillList[p.UserId]=true; task.wait(0.5); Refresh()
+                        local c=PS:FindFirstChild("p_"..p.UserId)
+                        if c then
+                            local s=c:FindFirstChildOfClass("UIStroke")
+                            if s then s.Color=Color3.fromRGB(210,48,48); s.Thickness=2 end
+                            TW(c,{BackgroundColor3=Color3.fromRGB(28,16,16)},0.2)
+                        end
+                    end
                 end)
-                vFPS.Text=fps.." fps"
-                local e=tick()-startT
-                vUp.Text=string.format("%02d:%02d:%02d",math.floor(e/3600),math.floor(e/60)%60,math.floor(e)%60)
-                vPly.Text=tostring(#Players:GetPlayers()).." / "..tostring(Players.MaxPlayers)
+                Players.PlayerRemoving:Connect(function() task.wait(0.5); Refresh() end)
+                Refresh()
             end
-            task.spawn(function() while F.Parent do pcall(UpdLive); task.wait(1) end end)
+
+            -- ================================================================
+            --  ゲーム情報 ── 折りたたみ対応
+            -- ================================================================
+            function Creators:CreateGameInfo()
+                local FULL_H   = 300
+                local HEADER_H = 48
+
+                local F=Instance.new("Frame")
+                F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
+                F.BorderSizePixel=0; F.Parent=container; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
+
+                MkLabel(F,{
+                    Size=UDim2.new(1,-55,0,30),Position=UDim2.new(0,14,0,9),
+                    Text="サーバー情報",TextSize=18,Font=Enum.Font.SourceSansBold,
+                    TextColor3=Color3.fromRGB(255,255,255),
+                })
+
+                MakeCollapsible(F, FULL_H, HEADER_H)
+
+                local Sep=Instance.new("Frame")
+                Sep.Size=UDim2.new(1,-24,0,1); Sep.Position=UDim2.new(0,12,0,40)
+                Sep.BackgroundColor3=Color3.fromRGB(28,28,38); Sep.BorderSizePixel=0; Sep.Parent=F
+                local function Row(lbl,y)
+                    MkLabel(F,{Size=UDim2.new(0.42,-4,0,26),Position=UDim2.new(0,16,0,y),
+                        Text=lbl,TextSize=15,Font=Enum.Font.GothamSemibold,
+                        TextColor3=Color3.fromRGB(95,115,155)})
+                    local v=MkLabel(F,{Size=UDim2.new(0.58,-4,0,26),Position=UDim2.new(0.42,0,0,y),
+                        Text="…",TextSize=15,Font=Enum.Font.SourceSans,
+                        TextColor3=Color3.fromRGB(200,210,230)})
+                    return v
+                end
+                local vSrv  = Row("サーバーID",   46)
+                local vPly  = Row("プレイヤー数",  74)
+                local vPing = Row("Ping",         102)
+                local vFPS  = Row("FPS",          130)
+                local vUp   = Row("稼働時間",     158)
+                local vGame = Row("ゲーム名",     186)
+                local vPID  = Row("PlaceID",      214)
+                local vMe   = Row("自分のUserId",  242)
+                pcall(function()
+                    local jid=tostring(game.JobId)
+                    vSrv.Text=jid~="" and (jid:sub(1,18).."...") or "ローカル"
+                    vGame.Text=tostring(game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
+                end)
+                pcall(function() vPID.Text=tostring(game.PlaceId) end)
+                pcall(function() vMe.Text=tostring(LocalPlayer.UserId) end)
+                local startT=tick(); local lastPing=0
+                local function UpdLive()
+                    pcall(function()
+                        lastPing=math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+                    end)
+                    local pc=Color3.fromRGB(65,210,100)
+                    if lastPing>300 then pc=Color3.fromRGB(215,70,70)
+                    elseif lastPing>150 then pc=Color3.fromRGB(240,175,45) end
+                    vPing.Text=lastPing.." ms"; vPing.TextColor3=pc
+                    local fps=0
+                    pcall(function()
+                        local s=tick(); RunService.RenderStepped:Wait(); fps=math.floor(1/(tick()-s))
+                    end)
+                    vFPS.Text=fps.." fps"
+                    local e=tick()-startT
+                    vUp.Text=string.format("%02d:%02d:%02d",math.floor(e/3600),math.floor(e/60)%60,math.floor(e)%60)
+                    vPly.Text=tostring(#Players:GetPlayers()).." / "..tostring(Players.MaxPlayers)
+                end
+                task.spawn(function() while F.Parent do pcall(UpdLive); task.wait(1) end end)
+            end
+
+            return Creators
+        end -- buildCreators 終了
+
+        -- Tab 本体に全ビルダーをコピー
+        local Creators = buildCreators(TC)
+        for k, v in pairs(Creators) do
+            Tab[k] = v
         end
 
         return Tab
-    end
+    end -- CreateTab 終了
 
     return Window
 end
@@ -1421,5 +1626,6 @@ end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v3.2 起動完了 | トグルキー: "..tostring(MyEngine.ToggleKey))
+print("[af_hub] v3.3 起動完了 | トグルキー: "..tostring(MyEngine.ToggleKey))
+print("[af_hub] v3.3 新機能: CreateCollapsibleSection() でセクション折りたたみが使えます")
 return MyEngine
