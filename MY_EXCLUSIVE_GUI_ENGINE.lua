@@ -1,9 +1,19 @@
--- af_hub GUI ENGINE - ULTIMATE V3.3
+-- af_hub GUI ENGINE - ULTIMATE V4.0
 -- Rayfield互換 / 完全日本語 / 一人称視点対応
--- V3.2: CreateTextInput + CreateColorPicker + :Set()メソッド + CreateLogViewer
--- V3.2 PATCH: PlayerList / LogViewer / GameInfo に折りたたみ機能追加
--- V3.3: CreateCollapsibleSection 追加（セクション単位での折りたたみ対応）
--- V3.3 PATCH: CreatePlayerList をテーブル式マルチ選択に変更（複数人同時選択対応）
+-- V4.0 CHANGELOG:
+--   [FIX] CreateLabel :Set()/:Get() が機能しないバグを修正
+--   [FIX] CreateSection / CreateParagraph / CreateButton 戻り値なしバグ修正
+--   [FIX] CreateColorPicker S/Vスライダーグラデーション更新バグ修正
+--   [NEW] CreateMultiDropdown - チェックボックス式複数選択ドロップダウン
+--   [NEW] CreateProgressBar  - 読み取り専用プログレスバー
+--   [NEW] CreateDivider      - 区切り線
+--   [NEW] Window:Dialog()    - モーダルダイアログ
+--   [NEW] Window:Destroy()   - ウィンドウ破棄
+--   [NEW] Tab:Select()       - プログラムからタブ切替
+--   [NEW] MyEngine:SaveConfig() / LoadConfig() - 設定保存/読込
+--   [NEW] MyEngine:Destroy() - 全GUI破棄
+--   [NEW] Notify Type フィールド（Success/Error/Warning/Info）対応
+--   [NEW] CreateInput エイリアス (CreateTextInput の別名)
 
 local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
@@ -11,6 +21,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
 local HttpService      = game:GetService("HttpService")
 local Stats            = game:GetService("Stats")
+local TextService      = game:GetService("TextService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -26,7 +37,7 @@ end
 
 local function CS(p, col, th)
     local s = Instance.new("UIStroke")
-    s.Color = col or Color3.fromRGB(45,45,50)
+    s.Color = col or Color3.fromRGB(45, 45, 50)
     s.Thickness = th or 1.5
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     s.Parent = p
@@ -44,17 +55,17 @@ end
 local function GetTime()
     local t = tick()
     return string.format("%02d:%02d:%02d",
-        math.floor(t/3600)%24, math.floor(t/60)%60, math.floor(t)%60)
+        math.floor(t / 3600) % 24, math.floor(t / 60) % 60, math.floor(t) % 60)
 end
 
 local function MkLabel(parent, props)
     local l = Instance.new("TextLabel")
     l.BackgroundTransparency = 1
     l.Font = Enum.Font.SourceSans
-    l.TextColor3 = Color3.fromRGB(255,255,255)
+    l.TextColor3 = Color3.fromRGB(255, 255, 255)
     l.TextSize = 16
     l.TextXAlignment = Enum.TextXAlignment.Left
-    for k,v in pairs(props) do pcall(function() l[k] = v end) end
+    for k, v in pairs(props) do pcall(function() l[k] = v end) end
     l.Parent = parent
     return l
 end
@@ -77,17 +88,17 @@ local function MakeCollapsible(F, fullH, headerH)
     local collapsed = false
 
     local Btn = Instance.new("TextButton")
-    Btn.Size          = UDim2.new(0, 28, 0, 28)
-    Btn.Position      = UDim2.new(1, -36, 0, (headerH - 28) / 2)
+    Btn.Size           = UDim2.new(0, 28, 0, 28)
+    Btn.Position       = UDim2.new(1, -36, 0, (headerH - 28) / 2)
     Btn.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
     Btn.BorderSizePixel  = 0
-    Btn.Text          = "▲"
-    Btn.TextColor3    = Color3.fromRGB(95, 115, 155)
-    Btn.TextSize      = 14
-    Btn.Font          = Enum.Font.GothamBold
+    Btn.Text           = "▲"
+    Btn.TextColor3     = Color3.fromRGB(95, 115, 155)
+    Btn.TextSize       = 14
+    Btn.Font           = Enum.Font.GothamBold
     Btn.AutoButtonColor = false
-    Btn.ZIndex        = 20
-    Btn.Parent        = F
+    Btn.ZIndex         = 20
+    Btn.Parent         = F
     CC(Btn, 6)
     CS(Btn, Color3.fromRGB(42, 42, 58), 1)
 
@@ -130,13 +141,14 @@ function MouseManager.BindFrame(_)    end
 --  エンジン本体
 -- ================================================================
 local MyEngine = {
-    Flags={}, KillList={}, Blacklist={}, Logs={},
+    Flags = {}, KillList = {}, Blacklist = {}, Logs = {},
     ToggleKey = Enum.KeyCode.K,
+    _ScreenGuis = {},
 }
 
 local LogListeners = {}
 local function AddLog(msg, t)
-    table.insert(MyEngine.Logs, {Message=msg, Type=t or "Info", Time=GetTime()})
+    table.insert(MyEngine.Logs, {Message = msg, Type = t or "Info", Time = GetTime()})
     if #MyEngine.Logs > 100 then table.remove(MyEngine.Logs, 1) end
     for _, cb in pairs(LogListeners) do pcall(cb) end
 end
@@ -146,163 +158,163 @@ end
 -- ================================================================
 local function PlayBoot(sg, onDone)
     local Boot = Instance.new("Frame")
-    Boot.Size = UDim2.new(1,0,1,0)
-    Boot.BackgroundColor3 = Color3.fromRGB(2,2,5)
+    Boot.Size = UDim2.new(1, 0, 1, 0)
+    Boot.BackgroundColor3 = Color3.fromRGB(2, 2, 5)
     Boot.BorderSizePixel = 0; Boot.ZIndex = 200; Boot.Parent = sg
 
     for i = 0, 20 do
         local fh = Instance.new("Frame")
-        fh.BackgroundColor3 = Color3.fromRGB(14,32,62)
+        fh.BackgroundColor3 = Color3.fromRGB(14, 32, 62)
         fh.BackgroundTransparency = 0.80; fh.BorderSizePixel = 0; fh.ZIndex = 201
-        fh.Size = UDim2.new(1,0,0,1); fh.Position = UDim2.new(0,0,i/20,0); fh.Parent = Boot
+        fh.Size = UDim2.new(1, 0, 0, 1); fh.Position = UDim2.new(0, 0, i / 20, 0); fh.Parent = Boot
         local fv = Instance.new("Frame")
-        fv.BackgroundColor3 = Color3.fromRGB(14,32,62)
+        fv.BackgroundColor3 = Color3.fromRGB(14, 32, 62)
         fv.BackgroundTransparency = 0.80; fv.BorderSizePixel = 0; fv.ZIndex = 201
-        fv.Size = UDim2.new(0,1,1,0); fv.Position = UDim2.new(i/20,0,0,0); fv.Parent = Boot
+        fv.Size = UDim2.new(0, 1, 1, 0); fv.Position = UDim2.new(i / 20, 0, 0, 0); fv.Parent = Boot
     end
 
     local function MkScan(color, thick, glowH, speed)
         local S = Instance.new("Frame")
-        S.Size = UDim2.new(1,0,0,thick); S.BackgroundColor3 = color
+        S.Size = UDim2.new(1, 0, 0, thick); S.BackgroundColor3 = color
         S.BackgroundTransparency = 0.12; S.BorderSizePixel = 0; S.ZIndex = 215; S.Parent = Boot
         local SG2 = Instance.new("Frame")
-        SG2.Size = UDim2.new(1,0,0,glowH); SG2.BackgroundColor3 = color
+        SG2.Size = UDim2.new(1, 0, 0, glowH); SG2.BackgroundColor3 = color
         SG2.BackgroundTransparency = 0.83; SG2.BorderSizePixel = 0; SG2.ZIndex = 214; SG2.Parent = Boot
         task.spawn(function()
             while S.Parent do
-                S.Position = UDim2.new(0,0,0,-thick); SG2.Position = UDim2.new(0,0,0,-glowH/2)
-                TW(S,{Position=UDim2.new(0,0,1,thick)},speed,Enum.EasingStyle.Linear)
-                TW(SG2,{Position=UDim2.new(0,0,1,glowH)},speed,Enum.EasingStyle.Linear)
-                task.wait(speed+0.06)
+                S.Position = UDim2.new(0, 0, 0, -thick); SG2.Position = UDim2.new(0, 0, 0, -glowH / 2)
+                TW(S, {Position = UDim2.new(0, 0, 1, thick)}, speed, Enum.EasingStyle.Linear)
+                TW(SG2, {Position = UDim2.new(0, 0, 1, glowH)}, speed, Enum.EasingStyle.Linear)
+                task.wait(speed + 0.06)
             end
         end)
     end
-    MkScan(Color3.fromRGB(40,155,255),2,30,0.95)
-    MkScan(Color3.fromRGB(110,220,255),1,14,1.5)
+    MkScan(Color3.fromRGB(40, 155, 255), 2, 30, 0.95)
+    MkScan(Color3.fromRGB(110, 220, 255), 1, 14, 1.5)
 
     local function Bracket(corner, delay)
-        local sz=38; local pad=22
+        local sz = 38; local pad = 22
         local f = Instance.new("Frame")
-        f.Size = UDim2.new(0,sz,0,sz); f.BackgroundTransparency = 1; f.ZIndex = 218; f.Parent = Boot
-        if corner=="TL" then     f.Position=UDim2.new(0,pad,0,pad)
-        elseif corner=="TR" then f.Position=UDim2.new(1,-pad-sz,0,pad)
-        elseif corner=="BL" then f.Position=UDim2.new(0,pad,1,-pad-sz)
-        else                     f.Position=UDim2.new(1,-pad-sz,1,-pad-sz) end
+        f.Size = UDim2.new(0, sz, 0, sz); f.BackgroundTransparency = 1; f.ZIndex = 218; f.Parent = Boot
+        if corner == "TL"     then f.Position = UDim2.new(0, pad, 0, pad)
+        elseif corner == "TR" then f.Position = UDim2.new(1, -pad - sz, 0, pad)
+        elseif corner == "BL" then f.Position = UDim2.new(0, pad, 1, -pad - sz)
+        else                       f.Position = UDim2.new(1, -pad - sz, 1, -pad - sz) end
         local h = Instance.new("Frame")
-        h.Size=UDim2.new(0,0,0,2); h.BackgroundColor3=Color3.fromRGB(55,185,255)
-        h.BorderSizePixel=0; h.ZIndex=219; h.Parent=f
+        h.Size = UDim2.new(0, 0, 0, 2); h.BackgroundColor3 = Color3.fromRGB(55, 185, 255)
+        h.BorderSizePixel = 0; h.ZIndex = 219; h.Parent = f
         local v = Instance.new("Frame")
-        v.Size=UDim2.new(0,2,0,0); v.BackgroundColor3=Color3.fromRGB(55,185,255)
-        v.BorderSizePixel=0; v.ZIndex=219; v.Parent=f
-        if corner=="TR" then
-            h.AnchorPoint=Vector2.new(1,0); h.Position=UDim2.new(1,0,0,0); v.Position=UDim2.new(1,-2,0,0)
-        elseif corner=="BL" then
-            h.Position=UDim2.new(0,0,1,-2); v.AnchorPoint=Vector2.new(0,1); v.Position=UDim2.new(0,0,1,0)
-        elseif corner=="BR" then
-            h.AnchorPoint=Vector2.new(1,0); h.Position=UDim2.new(1,0,1,-2)
-            v.AnchorPoint=Vector2.new(0,1); v.Position=UDim2.new(1,-2,1,0)
+        v.Size = UDim2.new(0, 2, 0, 0); v.BackgroundColor3 = Color3.fromRGB(55, 185, 255)
+        v.BorderSizePixel = 0; v.ZIndex = 219; v.Parent = f
+        if corner == "TR" then
+            h.AnchorPoint = Vector2.new(1, 0); h.Position = UDim2.new(1, 0, 0, 0); v.Position = UDim2.new(1, -2, 0, 0)
+        elseif corner == "BL" then
+            h.Position = UDim2.new(0, 0, 1, -2); v.AnchorPoint = Vector2.new(0, 1); v.Position = UDim2.new(0, 0, 1, 0)
+        elseif corner == "BR" then
+            h.AnchorPoint = Vector2.new(1, 0); h.Position = UDim2.new(1, 0, 1, -2)
+            v.AnchorPoint = Vector2.new(0, 1); v.Position = UDim2.new(1, -2, 1, 0)
         end
         task.spawn(function()
             task.wait(delay)
-            TW(h,{Size=UDim2.new(1,0,0,2)},0.22,Enum.EasingStyle.Quint)
-            TW(v,{Size=UDim2.new(0,2,1,0)},0.22,Enum.EasingStyle.Quint)
+            TW(h, {Size = UDim2.new(1, 0, 0, 2)}, 0.22, Enum.EasingStyle.Quint)
+            TW(v, {Size = UDim2.new(0, 2, 1, 0)}, 0.22, Enum.EasingStyle.Quint)
         end)
     end
-    Bracket("TL",0.08); Bracket("TR",0.18); Bracket("BL",0.28); Bracket("BR",0.38)
+    Bracket("TL", 0.08); Bracket("TR", 0.18); Bracket("BL", 0.28); Bracket("BR", 0.38)
 
     local hexChars = "0123456789ABCDEF"
     for _ = 1, 26 do
-        local xPos = math.random()*0.91
-        local hl = MkLabel(Boot,{
-            Size=UDim2.new(0,130,0,12), Position=UDim2.new(xPos,0,-0.06,0),
-            Text="", TextColor3=Color3.fromRGB(18,55,100), TextSize=9,
-            Font=Enum.Font.Code, ZIndex=202, TextXAlignment=Enum.TextXAlignment.Left,
+        local xPos = math.random() * 0.91
+        local hl = MkLabel(Boot, {
+            Size = UDim2.new(0, 130, 0, 12), Position = UDim2.new(xPos, 0, -0.06, 0),
+            Text = "", TextColor3 = Color3.fromRGB(18, 55, 100), TextSize = 9,
+            Font = Enum.Font.Code, ZIndex = 202, TextXAlignment = Enum.TextXAlignment.Left,
         })
         task.spawn(function()
-            task.wait(math.random()*1.8)
+            task.wait(math.random() * 1.8)
             while hl.Parent do
-                hl.Position=UDim2.new(xPos,0,-0.06,0); hl.TextTransparency=0
-                local fallT=1.6+math.random()*1.4
-                TW(hl,{Position=UDim2.new(xPos,0,1.06,0),TextTransparency=0.5},fallT,Enum.EasingStyle.Linear)
-                local elapsed=0
-                while elapsed<fallT and hl.Parent do
-                    local s=""
-                    for _=1,math.random(7,16) do s=s..hexChars:sub(math.random(1,16),math.random(1,16)) end
-                    hl.Text=s
-                    local w=0.07+math.random()*0.09; task.wait(w); elapsed=elapsed+w
+                hl.Position = UDim2.new(xPos, 0, -0.06, 0); hl.TextTransparency = 0
+                local fallT = 1.6 + math.random() * 1.4
+                TW(hl, {Position = UDim2.new(xPos, 0, 1.06, 0), TextTransparency = 0.5}, fallT, Enum.EasingStyle.Linear)
+                local elapsed = 0
+                while elapsed < fallT and hl.Parent do
+                    local s = ""
+                    for _ = 1, math.random(7, 16) do s = s .. hexChars:sub(math.random(1, 16), math.random(1, 16)) end
+                    hl.Text = s
+                    local w = 0.07 + math.random() * 0.09; task.wait(w); elapsed = elapsed + w
                 end
-                task.wait(math.random()*0.6)
+                task.wait(math.random() * 0.6)
             end
         end)
     end
 
     local Panel = Instance.new("Frame")
-    Panel.Size=UDim2.new(0,490,0,225); Panel.AnchorPoint=Vector2.new(0.5,0.5)
-    Panel.Position=UDim2.new(0.5,0,0.75,0); Panel.BackgroundColor3=Color3.fromRGB(6,6,10)
-    Panel.BackgroundTransparency=1; Panel.BorderSizePixel=0; Panel.ZIndex=220; Panel.Parent=Boot
-    CC(Panel,8)
-    local PanelStroke=CS(Panel,Color3.fromRGB(32,105,205),1.5)
-    local PanelGrad=Instance.new("UIGradient")
-    PanelGrad.Color=ColorSequence.new{
-        ColorSequenceKeypoint.new(0,Color3.fromRGB(13,13,20)),
-        ColorSequenceKeypoint.new(1,Color3.fromRGB(5,5,9)),
+    Panel.Size = UDim2.new(0, 490, 0, 225); Panel.AnchorPoint = Vector2.new(0.5, 0.5)
+    Panel.Position = UDim2.new(0.5, 0, 0.75, 0); Panel.BackgroundColor3 = Color3.fromRGB(6, 6, 10)
+    Panel.BackgroundTransparency = 1; Panel.BorderSizePixel = 0; Panel.ZIndex = 220; Panel.Parent = Boot
+    CC(Panel, 8)
+    local PanelStroke = CS(Panel, Color3.fromRGB(32, 105, 205), 1.5)
+    local PanelGrad = Instance.new("UIGradient")
+    PanelGrad.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(13, 13, 20)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 5, 9)),
     }
-    PanelGrad.Rotation=135; PanelGrad.Parent=Panel
+    PanelGrad.Rotation = 135; PanelGrad.Parent = Panel
 
-    local TopLine=Instance.new("Frame")
-    TopLine.Size=UDim2.new(0,0,0,2); TopLine.BackgroundColor3=Color3.fromRGB(50,170,255)
-    TopLine.BorderSizePixel=0; TopLine.ZIndex=221; TopLine.Parent=Panel; CC(TopLine,100)
-    local BotLine=Instance.new("Frame")
-    BotLine.Size=UDim2.new(0,0,0,1); BotLine.Position=UDim2.new(0,0,1,-1)
-    BotLine.BackgroundColor3=Color3.fromRGB(28,95,195)
-    BotLine.BorderSizePixel=0; BotLine.ZIndex=221; BotLine.Parent=Panel; CC(BotLine,100)
+    local TopLine = Instance.new("Frame")
+    TopLine.Size = UDim2.new(0, 0, 0, 2); TopLine.BackgroundColor3 = Color3.fromRGB(50, 170, 255)
+    TopLine.BorderSizePixel = 0; TopLine.ZIndex = 221; TopLine.Parent = Panel; CC(TopLine, 100)
+    local BotLine = Instance.new("Frame")
+    BotLine.Size = UDim2.new(0, 0, 0, 1); BotLine.Position = UDim2.new(0, 0, 1, -1)
+    BotLine.BackgroundColor3 = Color3.fromRGB(28, 95, 195)
+    BotLine.BorderSizePixel = 0; BotLine.ZIndex = 221; BotLine.Parent = Panel; CC(BotLine, 100)
 
-    local Logo=MkLabel(Panel,{
-        Size=UDim2.new(1,0,0,56),Position=UDim2.new(0,0,0,16),
-        Text="af_hub",TextColor3=Color3.fromRGB(255,255,255),TextSize=46,
-        Font=Enum.Font.GothamBold,TextTransparency=1,
-        TextXAlignment=Enum.TextXAlignment.Center,ZIndex=222,
+    local Logo = MkLabel(Panel, {
+        Size = UDim2.new(1, 0, 0, 56), Position = UDim2.new(0, 0, 0, 16),
+        Text = "af_hub", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 46,
+        Font = Enum.Font.GothamBold, TextTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 222,
     })
-    local Sub=MkLabel(Panel,{
-        Size=UDim2.new(1,0,0,16),Position=UDim2.new(0,0,0,77),
-        Text="",TextColor3=Color3.fromRGB(45,145,255),TextSize=11,
-        Font=Enum.Font.SourceSansSemibold,TextXAlignment=Enum.TextXAlignment.Center,ZIndex=222,
-    })
-
-    local TrkBG=Instance.new("Frame")
-    TrkBG.Size=UDim2.new(1,-40,0,5); TrkBG.Position=UDim2.new(0,20,0,112)
-    TrkBG.BackgroundColor3=Color3.fromRGB(14,14,22); TrkBG.BorderSizePixel=0
-    TrkBG.ZIndex=222; TrkBG.Parent=Panel; CC(TrkBG,100); CS(TrkBG,Color3.fromRGB(28,55,115),1)
-    local Fill=Instance.new("Frame")
-    Fill.Size=UDim2.new(0,0,1,0); Fill.BackgroundColor3=Color3.fromRGB(45,145,255)
-    Fill.BorderSizePixel=0; Fill.ZIndex=223; Fill.Parent=TrkBG; CC(Fill,100)
-    local Glow=Instance.new("Frame")
-    Glow.Size=UDim2.new(0,0,0,18); Glow.Position=UDim2.new(0,0,0.5,-9)
-    Glow.BackgroundColor3=Color3.fromRGB(70,175,255); Glow.BackgroundTransparency=0.76
-    Glow.BorderSizePixel=0; Glow.ZIndex=221; Glow.Parent=TrkBG; CC(Glow,100)
-    local Chip=Instance.new("Frame")
-    Chip.Size=UDim2.new(0,7,0,7); Chip.AnchorPoint=Vector2.new(0.5,0.5)
-    Chip.Position=UDim2.new(1,0,0.5,0); Chip.BackgroundColor3=Color3.fromRGB(210,240,255)
-    Chip.BackgroundTransparency=0.1; Chip.BorderSizePixel=0; Chip.ZIndex=225; Chip.Parent=Fill; CC(Chip,100)
-
-    local PctLbl=MkLabel(Panel,{
-        Size=UDim2.new(1,0,0,16),Position=UDim2.new(0,0,0,124),
-        Text="0%",TextColor3=Color3.fromRGB(55,95,148),TextSize=11,
-        Font=Enum.Font.SourceSansSemibold,TextXAlignment=Enum.TextXAlignment.Center,ZIndex=222,
-    })
-    local StatusLbl=MkLabel(Panel,{
-        Size=UDim2.new(1,-24,0,16),Position=UDim2.new(0,12,0,148),
-        Text="",TextColor3=Color3.fromRGB(38,72,112),TextSize=11,
-        Font=Enum.Font.Code,TextXAlignment=Enum.TextXAlignment.Center,ZIndex=222,
-    })
-    MkLabel(Panel,{
-        Size=UDim2.new(1,-16,0,14),Position=UDim2.new(0,8,1,-18),
-        Text="v3.3  //  "..LocalPlayer.Name,
-        TextColor3=Color3.fromRGB(28,52,82),TextSize=10,
-        Font=Enum.Font.Code,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=222,
+    local Sub = MkLabel(Panel, {
+        Size = UDim2.new(1, 0, 0, 16), Position = UDim2.new(0, 0, 0, 77),
+        Text = "", TextColor3 = Color3.fromRGB(45, 145, 255), TextSize = 11,
+        Font = Enum.Font.SourceSansSemibold, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 222,
     })
 
-    local statMsgs={
+    local TrkBG = Instance.new("Frame")
+    TrkBG.Size = UDim2.new(1, -40, 0, 5); TrkBG.Position = UDim2.new(0, 20, 0, 112)
+    TrkBG.BackgroundColor3 = Color3.fromRGB(14, 14, 22); TrkBG.BorderSizePixel = 0
+    TrkBG.ZIndex = 222; TrkBG.Parent = Panel; CC(TrkBG, 100); CS(TrkBG, Color3.fromRGB(28, 55, 115), 1)
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new(0, 0, 1, 0); Fill.BackgroundColor3 = Color3.fromRGB(45, 145, 255)
+    Fill.BorderSizePixel = 0; Fill.ZIndex = 223; Fill.Parent = TrkBG; CC(Fill, 100)
+    local Glow = Instance.new("Frame")
+    Glow.Size = UDim2.new(0, 0, 0, 18); Glow.Position = UDim2.new(0, 0, 0.5, -9)
+    Glow.BackgroundColor3 = Color3.fromRGB(70, 175, 255); Glow.BackgroundTransparency = 0.76
+    Glow.BorderSizePixel = 0; Glow.ZIndex = 221; Glow.Parent = TrkBG; CC(Glow, 100)
+    local Chip = Instance.new("Frame")
+    Chip.Size = UDim2.new(0, 7, 0, 7); Chip.AnchorPoint = Vector2.new(0.5, 0.5)
+    Chip.Position = UDim2.new(1, 0, 0.5, 0); Chip.BackgroundColor3 = Color3.fromRGB(210, 240, 255)
+    Chip.BackgroundTransparency = 0.1; Chip.BorderSizePixel = 0; Chip.ZIndex = 225; Chip.Parent = Fill; CC(Chip, 100)
+
+    local PctLbl = MkLabel(Panel, {
+        Size = UDim2.new(1, 0, 0, 16), Position = UDim2.new(0, 0, 0, 124),
+        Text = "0%", TextColor3 = Color3.fromRGB(55, 95, 148), TextSize = 11,
+        Font = Enum.Font.SourceSansSemibold, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 222,
+    })
+    local StatusLbl = MkLabel(Panel, {
+        Size = UDim2.new(1, -24, 0, 16), Position = UDim2.new(0, 12, 0, 148),
+        Text = "", TextColor3 = Color3.fromRGB(38, 72, 112), TextSize = 11,
+        Font = Enum.Font.Code, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 222,
+    })
+    MkLabel(Panel, {
+        Size = UDim2.new(1, -16, 0, 14), Position = UDim2.new(0, 8, 1, -18),
+        Text = "v4.0  //  " .. LocalPlayer.Name,
+        TextColor3 = Color3.fromRGB(28, 52, 82), TextSize = 10,
+        Font = Enum.Font.Code, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 222,
+    })
+
+    local statMsgs = {
         "[ CORE_MODULES.LOAD ............. OK ]",
         "[ GUI_ENGINE.INJECT ............. OK ]",
         "[ PLAYER_DATA.LINK .............. OK ]",
@@ -312,65 +324,65 @@ local function PlayBoot(sg, onDone)
 
     task.spawn(function()
         task.spawn(function()
-            local cols={Color3.fromRGB(32,105,205),Color3.fromRGB(50,165,255),
-                        Color3.fromRGB(95,215,255),Color3.fromRGB(50,165,255)}
-            local ci=1
+            local cols = {Color3.fromRGB(32, 105, 205), Color3.fromRGB(50, 165, 255),
+                         Color3.fromRGB(95, 215, 255), Color3.fromRGB(50, 165, 255)}
+            local ci = 1
             while Panel.Parent and Boot.Parent do
-                ci=ci%#cols+1; TW(PanelStroke,{Color=cols[ci]},0.45); task.wait(0.5)
+                ci = ci % #cols + 1; TW(PanelStroke, {Color = cols[ci]}, 0.45); task.wait(0.5)
             end
         end)
         task.wait(0.12)
-        TW(Panel,{Position=UDim2.new(0.5,0,0.5,0),BackgroundTransparency=0},
-            0.52,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+        TW(Panel, {Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0},
+            0.52, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         task.wait(0.28)
-        TW(TopLine,{Size=UDim2.new(1,0,0,2)},0.38,Enum.EasingStyle.Quint)
-        TW(BotLine,{Size=UDim2.new(1,0,0,1)},0.38,Enum.EasingStyle.Quint)
+        TW(TopLine, {Size = UDim2.new(1, 0, 0, 2)}, 0.38, Enum.EasingStyle.Quint)
+        TW(BotLine, {Size = UDim2.new(1, 0, 0, 1)}, 0.38, Enum.EasingStyle.Quint)
         task.wait(0.18)
-        TW(Logo,{TextTransparency=0},0.38,Enum.EasingStyle.Quint)
+        TW(Logo, {TextTransparency = 0}, 0.38, Enum.EasingStyle.Quint)
         task.wait(0.12)
         task.spawn(function()
-            for _=1,5 do
-                task.wait(0.07+math.random()*0.18)
+            for _ = 1, 5 do
+                task.wait(0.07 + math.random() * 0.18)
                 if not Logo.Parent then break end
-                Logo.Position=UDim2.new(0,math.random(-4,4),0,16)
-                Logo.TextColor3=Color3.fromRGB(195+math.random(0,60),math.random(175,255),255)
+                Logo.Position = UDim2.new(0, math.random(-4, 4), 0, 16)
+                Logo.TextColor3 = Color3.fromRGB(195 + math.random(0, 60), math.random(175, 255), 255)
                 task.wait(0.035)
-                Logo.Position=UDim2.new(0,0,0,16); Logo.TextColor3=Color3.fromRGB(255,255,255)
+                Logo.Position = UDim2.new(0, 0, 0, 16); Logo.TextColor3 = Color3.fromRGB(255, 255, 255)
             end
         end)
-        task.spawn(function() TypeWrite(Sub,"ULTIMATE  //  SYSTEM INITIALIZING...",0.024) end)
+        task.spawn(function() TypeWrite(Sub, "ULTIMATE  //  SYSTEM INITIALIZING...", 0.024) end)
         task.wait(0.08)
-        local prevMi=0
-        for i=1,100 do
+        local prevMi = 0
+        for i = 1, 100 do
             task.wait(0.012)
-            local p=i/100; Fill.Size=UDim2.new(p,0,1,0); Glow.Size=UDim2.new(p,0,0,18)
-            PctLbl.Text=i.."%"
-            local mi=math.ceil(p*#statMsgs)
-            if mi>=1 and mi<=#statMsgs and mi~=prevMi then StatusLbl.Text=statMsgs[mi]; prevMi=mi end
+            local p = i / 100; Fill.Size = UDim2.new(p, 0, 1, 0); Glow.Size = UDim2.new(p, 0, 0, 18)
+            PctLbl.Text = i .. "%"
+            local mi = math.ceil(p * #statMsgs)
+            if mi >= 1 and mi <= #statMsgs and mi ~= prevMi then StatusLbl.Text = statMsgs[mi]; prevMi = mi end
         end
-        for _=1,3 do
-            task.wait(0.055); Fill.BackgroundColor3=Color3.fromRGB(130,215,255)
-            task.wait(0.035); Fill.BackgroundColor3=Color3.fromRGB(45,145,255)
+        for _ = 1, 3 do
+            task.wait(0.055); Fill.BackgroundColor3 = Color3.fromRGB(130, 215, 255)
+            task.wait(0.035); Fill.BackgroundColor3 = Color3.fromRGB(45, 145, 255)
         end
         task.wait(0.14)
-        local function FlashFrame(col,alpha,fadeOut)
-            local Fl=Instance.new("Frame"); Fl.Size=UDim2.new(1,0,1,0)
-            Fl.BackgroundColor3=col; Fl.BackgroundTransparency=1
-            Fl.BorderSizePixel=0; Fl.ZIndex=300; Fl.Parent=Boot
-            TW(Fl,{BackgroundTransparency=alpha},0.07); task.wait(0.07)
-            TW(Fl,{BackgroundTransparency=1},fadeOut)
-            task.delay(fadeOut,function() pcall(function() Fl:Destroy() end) end)
+        local function FlashFrame(col, alpha, fadeOut)
+            local Fl = Instance.new("Frame"); Fl.Size = UDim2.new(1, 0, 1, 0)
+            Fl.BackgroundColor3 = col; Fl.BackgroundTransparency = 1
+            Fl.BorderSizePixel = 0; Fl.ZIndex = 300; Fl.Parent = Boot
+            TW(Fl, {BackgroundTransparency = alpha}, 0.07); task.wait(0.07)
+            TW(Fl, {BackgroundTransparency = 1}, fadeOut)
+            task.delay(fadeOut, function() pcall(function() Fl:Destroy() end) end)
         end
-        FlashFrame(Color3.fromRGB(0,100,255),0.50,0.14);   task.wait(0.11)
-        FlashFrame(Color3.fromRGB(255,255,255),0.32,0.16); task.wait(0.09)
-        FlashFrame(Color3.fromRGB(100,210,255),0.60,0.10); task.wait(0.07)
-        TW(Panel,{Position=UDim2.new(0.5,0,-0.12,0),BackgroundTransparency=1},
-            0.38,Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-        local Final=Instance.new("Frame"); Final.Size=UDim2.new(1,0,1,0)
-        Final.BackgroundColor3=Color3.fromRGB(255,255,255); Final.BackgroundTransparency=1
-        Final.BorderSizePixel=0; Final.ZIndex=350; Final.Parent=Boot
-        task.wait(0.18); TW(Final,{BackgroundTransparency=0},0.10); task.wait(0.10)
-        TW(Final,{BackgroundTransparency=1},0.28); task.wait(0.30)
+        FlashFrame(Color3.fromRGB(0, 100, 255), 0.50, 0.14);   task.wait(0.11)
+        FlashFrame(Color3.fromRGB(255, 255, 255), 0.32, 0.16); task.wait(0.09)
+        FlashFrame(Color3.fromRGB(100, 210, 255), 0.60, 0.10); task.wait(0.07)
+        TW(Panel, {Position = UDim2.new(0.5, 0, -0.12, 0), BackgroundTransparency = 1},
+            0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        local Final = Instance.new("Frame"); Final.Size = UDim2.new(1, 0, 1, 0)
+        Final.BackgroundColor3 = Color3.fromRGB(255, 255, 255); Final.BackgroundTransparency = 1
+        Final.BorderSizePixel = 0; Final.ZIndex = 350; Final.Parent = Boot
+        task.wait(0.18); TW(Final, {BackgroundTransparency = 0}, 0.10); task.wait(0.10)
+        TW(Final, {BackgroundTransparency = 1}, 0.28); task.wait(0.30)
         Boot:Destroy(); if onDone then onDone() end
     end)
 end
@@ -379,24 +391,24 @@ end
 --  ドラッグ
 -- ================================================================
 local function MakeDraggable(handle, target)
-    local drag,di,ds,sp=false,nil,nil,nil
+    local drag, di, ds, sp = false, nil, nil, nil
     handle.InputBegan:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1
-        or inp.UserInputType==Enum.UserInputType.Touch then
-            drag=true; ds=inp.Position; sp=target.Position
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+        or inp.UserInputType == Enum.UserInputType.Touch then
+            drag = true; ds = inp.Position; sp = target.Position
             inp.Changed:Connect(function()
-                if inp.UserInputState==Enum.UserInputState.End then drag=false end
+                if inp.UserInputState == Enum.UserInputState.End then drag = false end
             end)
         end
     end)
     handle.InputChanged:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseMovement
-        or inp.UserInputType==Enum.UserInputType.Touch then di=inp end
+        if inp.UserInputType == Enum.UserInputType.MouseMovement
+        or inp.UserInputType == Enum.UserInputType.Touch then di = inp end
     end)
     UserInputService.InputChanged:Connect(function(inp)
-        if inp==di and drag then
-            local d=inp.Position-ds
-            target.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y)
+        if inp == di and drag then
+            local d = inp.Position - ds
+            target.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
         end
     end)
 end
@@ -405,165 +417,166 @@ end
 --  CreateWindow
 -- ================================================================
 function MyEngine:CreateWindow(Config)
-    local WinName=Config.Name or "af_hub"
-    if Config.ToggleKey then MyEngine.ToggleKey=Config.ToggleKey end
+    local WinName = Config.Name or "af_hub"
+    if Config.ToggleKey then MyEngine.ToggleKey = Config.ToggleKey end
 
-    local SG=Instance.new("ScreenGui")
-    SG.Name="afHub_"..HttpService:GenerateGUID()
-    SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-    SG.DisplayOrder=100
-    SG.ResetOnSpawn=false
-    pcall(function() SG.IgnoreGuiInset=true end)
-    SG.Parent=LocalPlayer:WaitForChild("PlayerGui")
+    local SG = Instance.new("ScreenGui")
+    SG.Name = "afHub_" .. HttpService:GenerateGUID()
+    SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    SG.DisplayOrder = 100
+    SG.ResetOnSpawn = false
+    pcall(function() SG.IgnoreGuiInset = true end)
+    SG.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    table.insert(MyEngine._ScreenGuis, SG)
 
-    PlayBoot(SG,function()
-        AddLog("GUI起動完了","Success")
+    PlayBoot(SG, function()
+        AddLog("GUI起動完了", "Success")
         MouseManager.ShowCursor()
     end)
 
-    local Main=Instance.new("Frame")
-    Main.Name="Main"; Main.Size=UDim2.new(0,820,0,520)
-    Main.AnchorPoint=Vector2.new(0.5,0.5); Main.Position=UDim2.new(0.5,0,0.5,0)
-    Main.BackgroundColor3=Color3.fromRGB(14,14,16); Main.BorderSizePixel=0
-    Main.BackgroundTransparency=1; Main.Parent=SG
-    CC(Main,12); CS(Main,Color3.fromRGB(38,38,48),2)
-    local Grad=Instance.new("UIGradient")
-    Grad.Color=ColorSequence.new{
-        ColorSequenceKeypoint.new(0,Color3.fromRGB(20,20,24)),
-        ColorSequenceKeypoint.new(1,Color3.fromRGB(14,14,16)),
+    local Main = Instance.new("Frame")
+    Main.Name = "Main"; Main.Size = UDim2.new(0, 820, 0, 520)
+    Main.AnchorPoint = Vector2.new(0.5, 0.5); Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Main.BackgroundColor3 = Color3.fromRGB(14, 14, 16); Main.BorderSizePixel = 0
+    Main.BackgroundTransparency = 1; Main.Parent = SG
+    CC(Main, 12); CS(Main, Color3.fromRGB(38, 38, 48), 2)
+    local Grad = Instance.new("UIGradient")
+    Grad.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 20, 24)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(14, 14, 16)),
     }
-    Grad.Rotation=140; Grad.Parent=Main
-    task.delay(2.7,function() TW(Main,{BackgroundTransparency=0},0.45) end)
+    Grad.Rotation = 140; Grad.Parent = Main
+    task.delay(2.7, function() TW(Main, {BackgroundTransparency = 0}, 0.45) end)
     MouseManager.BindFrame(Main)
 
-    local Sidebar=Instance.new("Frame")
-    Sidebar.Size=UDim2.new(0,210,1,0); Sidebar.BackgroundColor3=Color3.fromRGB(10,10,12)
-    Sidebar.BorderSizePixel=0; Sidebar.Parent=Main; CC(Sidebar,12)
-    local SideDiv=Instance.new("Frame")
-    SideDiv.Size=UDim2.new(0,1,1,0); SideDiv.Position=UDim2.new(1,0,0,0)
-    SideDiv.BackgroundColor3=Color3.fromRGB(30,30,38); SideDiv.BorderSizePixel=0; SideDiv.Parent=Sidebar
+    local Sidebar = Instance.new("Frame")
+    Sidebar.Size = UDim2.new(0, 210, 1, 0); Sidebar.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+    Sidebar.BorderSizePixel = 0; Sidebar.Parent = Main; CC(Sidebar, 12)
+    local SideDiv = Instance.new("Frame")
+    SideDiv.Size = UDim2.new(0, 1, 1, 0); SideDiv.Position = UDim2.new(1, 0, 0, 0)
+    SideDiv.BackgroundColor3 = Color3.fromRGB(30, 30, 38); SideDiv.BorderSizePixel = 0; SideDiv.Parent = Sidebar
 
-    local TitleBar=Instance.new("Frame")
-    TitleBar.Size=UDim2.new(1,0,0,54); TitleBar.BackgroundTransparency=1; TitleBar.Parent=Main
-    MakeDraggable(TitleBar,Main)
-    MkLabel(TitleBar,{
-        Size=UDim2.new(1,-115,1,0),Position=UDim2.new(0,15,0,0),
-        Text=WinName,TextSize=20,Font=Enum.Font.GothamBold,
-        TextColor3=Color3.fromRGB(255,255,255),ZIndex=2,
+    local TitleBar = Instance.new("Frame")
+    TitleBar.Size = UDim2.new(1, 0, 0, 54); TitleBar.BackgroundTransparency = 1; TitleBar.Parent = Main
+    MakeDraggable(TitleBar, Main)
+    MkLabel(TitleBar, {
+        Size = UDim2.new(1, -115, 1, 0), Position = UDim2.new(0, 15, 0, 0),
+        Text = WinName, TextSize = 20, Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.fromRGB(255, 255, 255), ZIndex = 2,
     })
 
-    local function CtrlBtn(txt,bg,xoff)
-        local b=Instance.new("TextButton")
-        b.Size=UDim2.new(0,30,0,30); b.Position=UDim2.new(1,xoff,0.5,-15)
-        b.BackgroundColor3=bg; b.BorderSizePixel=0
-        b.Text=txt; b.TextColor3=Color3.fromRGB(255,255,255)
-        b.TextSize=15; b.Font=Enum.Font.GothamBold
-        b.AutoButtonColor=false; b.Parent=TitleBar; CC(b,6); return b
+    local function CtrlBtn(txt, bg, xoff)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0, 30, 0, 30); b.Position = UDim2.new(1, xoff, 0.5, -15)
+        b.BackgroundColor3 = bg; b.BorderSizePixel = 0
+        b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.TextSize = 15; b.Font = Enum.Font.GothamBold
+        b.AutoButtonColor = false; b.Parent = TitleBar; CC(b, 6); return b
     end
-    local CloseBtn=CtrlBtn("✕",Color3.fromRGB(170,48,48),-10)
-    local MinBtn=CtrlBtn("—",Color3.fromRGB(26,26,32),-46)
-    CloseBtn.MouseEnter:Connect(function() TW(CloseBtn,{BackgroundColor3=Color3.fromRGB(205,58,58)},0.1) end)
-    CloseBtn.MouseLeave:Connect(function() TW(CloseBtn,{BackgroundColor3=Color3.fromRGB(170,48,48)},0.1) end)
-    MinBtn.MouseEnter:Connect(function()   TW(MinBtn,{BackgroundColor3=Color3.fromRGB(42,42,52)},0.1) end)
-    MinBtn.MouseLeave:Connect(function()   TW(MinBtn,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.1) end)
+    local CloseBtn = CtrlBtn("✕", Color3.fromRGB(170, 48, 48), -10)
+    local MinBtn   = CtrlBtn("—", Color3.fromRGB(26, 26, 32), -46)
+    CloseBtn.MouseEnter:Connect(function() TW(CloseBtn, {BackgroundColor3 = Color3.fromRGB(205, 58, 58)}, 0.1) end)
+    CloseBtn.MouseLeave:Connect(function() TW(CloseBtn, {BackgroundColor3 = Color3.fromRGB(170, 48, 48)}, 0.1) end)
+    MinBtn.MouseEnter:Connect(function()   TW(MinBtn, {BackgroundColor3 = Color3.fromRGB(42, 42, 52)}, 0.1) end)
+    MinBtn.MouseLeave:Connect(function()   TW(MinBtn, {BackgroundColor3 = Color3.fromRGB(26, 26, 32)}, 0.1) end)
 
-    local Mini=Instance.new("TextButton")
-    Mini.Size=UDim2.new(0,50,0,50); Mini.AnchorPoint=Vector2.new(0,1)
-    Mini.Position=UDim2.new(0,20,1,-20); Mini.BackgroundColor3=Color3.fromRGB(14,14,16)
-    Mini.BorderSizePixel=0; Mini.Text="◈"; Mini.TextColor3=Color3.fromRGB(50,150,255)
-    Mini.TextSize=22; Mini.Font=Enum.Font.GothamBold
-    Mini.AutoButtonColor=false; Mini.Visible=false; Mini.ZIndex=50; Mini.Parent=SG
-    CC(Mini,10); CS(Mini,Color3.fromRGB(50,150,255),2)
-    MakeDraggable(Mini,Mini); MouseManager.BindFrame(Mini)
+    local Mini = Instance.new("TextButton")
+    Mini.Size = UDim2.new(0, 50, 0, 50); Mini.AnchorPoint = Vector2.new(0, 1)
+    Mini.Position = UDim2.new(0, 20, 1, -20); Mini.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
+    Mini.BorderSizePixel = 0; Mini.Text = "◈"; Mini.TextColor3 = Color3.fromRGB(50, 150, 255)
+    Mini.TextSize = 22; Mini.Font = Enum.Font.GothamBold
+    Mini.AutoButtonColor = false; Mini.Visible = false; Mini.ZIndex = 50; Mini.Parent = SG
+    CC(Mini, 10); CS(Mini, Color3.fromRGB(50, 150, 255), 2)
+    MakeDraggable(Mini, Mini); MouseManager.BindFrame(Mini)
 
-    local TabScroll=Instance.new("ScrollingFrame")
-    TabScroll.Size=UDim2.new(1,-10,1,-190); TabScroll.Position=UDim2.new(0,5,0,58)
-    TabScroll.BackgroundTransparency=1; TabScroll.BorderSizePixel=0
-    TabScroll.ScrollBarThickness=2; TabScroll.ScrollBarImageColor3=Color3.fromRGB(55,55,65)
-    TabScroll.Parent=Sidebar
-    local TL=Instance.new("UIListLayout")
-    TL.Padding=UDim.new(0,5); TL.SortOrder=Enum.SortOrder.LayoutOrder; TL.Parent=TabScroll
+    local TabScroll = Instance.new("ScrollingFrame")
+    TabScroll.Size = UDim2.new(1, -10, 1, -190); TabScroll.Position = UDim2.new(0, 5, 0, 58)
+    TabScroll.BackgroundTransparency = 1; TabScroll.BorderSizePixel = 0
+    TabScroll.ScrollBarThickness = 2; TabScroll.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+    TabScroll.Parent = Sidebar
+    local TL = Instance.new("UIListLayout")
+    TL.Padding = UDim.new(0, 5); TL.SortOrder = Enum.SortOrder.LayoutOrder; TL.Parent = TabScroll
     TL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        TabScroll.CanvasSize=UDim2.new(0,0,0,TL.AbsoluteContentSize.Y+8)
+        TabScroll.CanvasSize = UDim2.new(0, 0, 0, TL.AbsoluteContentSize.Y + 8)
     end)
 
-    local AccSec=Instance.new("Frame")
-    AccSec.Size=UDim2.new(1,-10,0,80); AccSec.Position=UDim2.new(0,5,1,-85)
-    AccSec.BackgroundColor3=Color3.fromRGB(15,15,18); AccSec.BorderSizePixel=0; AccSec.Parent=Sidebar
-    CC(AccSec,8); CS(AccSec,Color3.fromRGB(36,36,44),1)
-    local AccIco=Instance.new("ImageLabel")
-    AccIco.Size=UDim2.new(0,50,0,50); AccIco.Position=UDim2.new(0,10,0.5,-25)
-    AccIco.BackgroundTransparency=1
-    AccIco.Image="rbxthumb://type=AvatarHeadShot&id="..LocalPlayer.UserId.."&w=150&h=150"
-    AccIco.Parent=AccSec; CC(AccIco,100)
-    MkLabel(AccSec,{
-        Size=UDim2.new(1,-72,0,26),Position=UDim2.new(0,66,0.15,0),
-        Text=LocalPlayer.DisplayName,TextSize=16,Font=Enum.Font.SourceSansBold,
+    local AccSec = Instance.new("Frame")
+    AccSec.Size = UDim2.new(1, -10, 0, 80); AccSec.Position = UDim2.new(0, 5, 1, -85)
+    AccSec.BackgroundColor3 = Color3.fromRGB(15, 15, 18); AccSec.BorderSizePixel = 0; AccSec.Parent = Sidebar
+    CC(AccSec, 8); CS(AccSec, Color3.fromRGB(36, 36, 44), 1)
+    local AccIco = Instance.new("ImageLabel")
+    AccIco.Size = UDim2.new(0, 50, 0, 50); AccIco.Position = UDim2.new(0, 10, 0.5, -25)
+    AccIco.BackgroundTransparency = 1
+    AccIco.Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"
+    AccIco.Parent = AccSec; CC(AccIco, 100)
+    MkLabel(AccSec, {
+        Size = UDim2.new(1, -72, 0, 26), Position = UDim2.new(0, 66, 0.15, 0),
+        Text = LocalPlayer.DisplayName, TextSize = 16, Font = Enum.Font.SourceSansBold,
     })
-    MkLabel(AccSec,{
-        Size=UDim2.new(1,-72,0,18),Position=UDim2.new(0,66,0.60,0),
-        Text="@"..LocalPlayer.Name,TextSize=14,Font=Enum.Font.SourceSans,
-        TextColor3=Color3.fromRGB(65,125,195),
+    MkLabel(AccSec, {
+        Size = UDim2.new(1, -72, 0, 18), Position = UDim2.new(0, 66, 0.60, 0),
+        Text = "@" .. LocalPlayer.Name, TextSize = 14, Font = Enum.Font.SourceSans,
+        TextColor3 = Color3.fromRGB(65, 125, 195),
     })
-    local ODot=Instance.new("Frame")
-    ODot.Size=UDim2.new(0,8,0,8); ODot.Position=UDim2.new(0,56,1,-16)
-    ODot.BackgroundColor3=Color3.fromRGB(50,225,100); ODot.BorderSizePixel=0; ODot.Parent=AccSec; CC(ODot,100)
+    local ODot = Instance.new("Frame")
+    ODot.Size = UDim2.new(0, 8, 0, 8); ODot.Position = UDim2.new(0, 56, 1, -16)
+    ODot.BackgroundColor3 = Color3.fromRGB(50, 225, 100); ODot.BorderSizePixel = 0; ODot.Parent = AccSec; CC(ODot, 100)
 
-    local CA=Instance.new("Frame")
-    CA.Size=UDim2.new(1,-220,1,-64); CA.Position=UDim2.new(0,215,0,54)
-    CA.BackgroundTransparency=1; CA.Parent=Main
+    local CA = Instance.new("Frame")
+    CA.Size = UDim2.new(1, -220, 1, -64); CA.Position = UDim2.new(0, 215, 0, 54)
+    CA.BackgroundTransparency = 1; CA.Parent = Main
 
-    local isOpen=true; local isMin=false; local busy=false
+    local isOpen = true; local isMin = false; local busy = false
 
     local function Open(v)
-        if busy then return end; isOpen=v
+        if busy then return end; isOpen = v
         if v then
-            busy=true; Main.Visible=true
+            busy = true; Main.Visible = true
             MouseManager.ShowCursor()
-            Main.Size=UDim2.new(0,785,0,498); Main.BackgroundTransparency=1
-            TW(Main,{Size=UDim2.new(0,820,0,520),BackgroundTransparency=0},
-                0.38,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-            task.delay(0.38,function() busy=false end)
+            Main.Size = UDim2.new(0, 785, 0, 498); Main.BackgroundTransparency = 1
+            TW(Main, {Size = UDim2.new(0, 820, 0, 520), BackgroundTransparency = 0},
+                0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            task.delay(0.38, function() busy = false end)
         else
-            busy=true
-            local t=TW(Main,{Size=UDim2.new(0,795,0,508),BackgroundTransparency=1},
-                0.3,Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+            busy = true
+            local t = TW(Main, {Size = UDim2.new(0, 795, 0, 508), BackgroundTransparency = 1},
+                0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
             t.Completed:Connect(function()
-                Main.Visible=false; Main.Size=UDim2.new(0,820,0,520)
-                MouseManager.StopOverride(); MouseManager.HideCursor(); busy=false
+                Main.Visible = false; Main.Size = UDim2.new(0, 820, 0, 520)
+                MouseManager.StopOverride(); MouseManager.HideCursor(); busy = false
             end)
         end
     end
 
     local function Minimize(v)
-        if busy then return end; isMin=v; busy=true
+        if busy then return end; isMin = v; busy = true
         if v then
-            TW(Main,{Size=UDim2.new(0,50,0,50),BackgroundTransparency=1},
-                0.36,Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-            task.delay(0.36,function()
-                Main.Visible=false; Main.Size=UDim2.new(0,820,0,520)
-                Mini.Visible=true; Mini.BackgroundTransparency=1; Mini.Size=UDim2.new(0,38,0,38)
-                TW(Mini,{BackgroundTransparency=0,Size=UDim2.new(0,50,0,50)},
-                    0.3,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+            TW(Main, {Size = UDim2.new(0, 50, 0, 50), BackgroundTransparency = 1},
+                0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            task.delay(0.36, function()
+                Main.Visible = false; Main.Size = UDim2.new(0, 820, 0, 520)
+                Mini.Visible = true; Mini.BackgroundTransparency = 1; Mini.Size = UDim2.new(0, 38, 0, 38)
+                TW(Mini, {BackgroundTransparency = 0, Size = UDim2.new(0, 50, 0, 50)},
+                    0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
                 MouseManager.HideCursor()
-                busy=false
+                busy = false
             end)
         else
-            TW(Mini,{BackgroundTransparency=1,Size=UDim2.new(0,38,0,38)},
-                0.2,Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-            task.delay(0.2,function()
-                Mini.Visible=false; Mini.Size=UDim2.new(0,50,0,50)
-                Main.Visible=true; Main.Size=UDim2.new(0,785,0,498); Main.BackgroundTransparency=1
+            TW(Mini, {BackgroundTransparency = 1, Size = UDim2.new(0, 38, 0, 38)},
+                0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            task.delay(0.2, function()
+                Mini.Visible = false; Mini.Size = UDim2.new(0, 50, 0, 50)
+                Main.Visible = true; Main.Size = UDim2.new(0, 785, 0, 498); Main.BackgroundTransparency = 1
                 MouseManager.ShowCursor()
-                TW(Main,{Size=UDim2.new(0,820,0,520),BackgroundTransparency=0},
-                    0.38,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-                task.delay(0.38,function() busy=false end)
+                TW(Main, {Size = UDim2.new(0, 820, 0, 520), BackgroundTransparency = 0},
+                    0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                task.delay(0.38, function() busy = false end)
             end)
         end
     end
 
     UserInputService.InputBegan:Connect(function(inp)
-        if inp.KeyCode==MyEngine.ToggleKey then
+        if inp.KeyCode == MyEngine.ToggleKey then
             if busy then return end
             if isMin then Minimize(false) else Open(not isOpen) end
         end
@@ -574,188 +587,415 @@ function MyEngine:CreateWindow(Config)
     Mini.MouseButton1Click:Connect(function() Minimize(false) end)
 
     -- ================================================================
-    --  Window
+    --  Window オブジェクト
     -- ================================================================
-    local Window={_Main=Main,_Sidebar=Sidebar,_TabScroll=TabScroll,_CA=CA,_Tabs={}}
+    local Window = {_Main = Main, _Sidebar = Sidebar, _TabScroll = TabScroll, _CA = CA, _Tabs = {}, _SG = SG}
 
-    local TAB_ACTIVE_BG   = Color3.fromRGB(255,255,255)
-    local TAB_ACTIVE_TEXT = Color3.fromRGB(16,16,20)
-    local TAB_IDLE_BG     = Color3.fromRGB(17,17,20)
-    local TAB_IDLE_TEXT   = Color3.fromRGB(155,155,170)
+    local TAB_ACTIVE_BG   = Color3.fromRGB(255, 255, 255)
+    local TAB_ACTIVE_TEXT = Color3.fromRGB(16, 16, 20)
+    local TAB_IDLE_BG     = Color3.fromRGB(17, 17, 20)
+    local TAB_IDLE_TEXT   = Color3.fromRGB(155, 155, 170)
 
-    function Window:CreateTab(TabName)
-        local TBtn=Instance.new("TextButton")
-        TBtn.Size=UDim2.new(1,-8,0,44)
-        TBtn.BackgroundColor3=TAB_IDLE_BG
-        TBtn.BorderSizePixel=0
-        TBtn.Text="  "..TabName
-        TBtn.TextColor3=TAB_IDLE_TEXT
-        TBtn.TextSize=17
-        TBtn.Font=Enum.Font.GothamSemibold
-        TBtn.TextXAlignment=Enum.TextXAlignment.Left
-        TBtn.AutoButtonColor=false; TBtn.Parent=TabScroll
-        CC(TBtn,7)
+    -- ================================================================
+    --  Window:Destroy
+    -- ================================================================
+    function Window:Destroy()
+        pcall(function() SG:Destroy() end)
+    end
 
-        local Acc=Instance.new("Frame")
-        Acc.Size=UDim2.new(0,3,0.55,0); Acc.Position=UDim2.new(0,0,0.225,0)
-        Acc.BackgroundColor3=Color3.fromRGB(50,150,255)
-        Acc.BorderSizePixel=0; Acc.BackgroundTransparency=1; Acc.Parent=TBtn; CC(Acc,100)
+    -- ================================================================
+    --  Window:Dialog - モーダルダイアログ
+    -- ================================================================
+    function Window:Dialog(Data)
+        -- Data: {Title, Content, Buttons={{Title, Color, Callback}, ...}}
+        local Overlay = Instance.new("Frame")
+        Overlay.Size = UDim2.new(1, 0, 1, 0)
+        Overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        Overlay.BackgroundTransparency = 0.42
+        Overlay.BorderSizePixel = 0
+        Overlay.ZIndex = 500
+        Overlay.Parent = Main
 
-        local TC=Instance.new("ScrollingFrame")
-        TC.Name=TabName.."_C"; TC.Size=UDim2.new(1,0,1,0)
-        TC.BackgroundTransparency=1; TC.BorderSizePixel=0
-        TC.ScrollBarThickness=3; TC.ScrollBarImageColor3=Color3.fromRGB(55,55,65)
-        TC.Visible=false; TC.Parent=CA
-        local CL=Instance.new("UIListLayout")
-        CL.Padding=UDim.new(0,8); CL.SortOrder=Enum.SortOrder.LayoutOrder; CL.Parent=TC
-        local CP=Instance.new("UIPadding")
-        CP.PaddingTop=UDim.new(0,8); CP.PaddingRight=UDim.new(0,10); CP.Parent=TC
-        CL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            TC.CanvasSize=UDim2.new(0,0,0,CL.AbsoluteContentSize.Y+18)
-        end)
+        local buttons = Data.Buttons or {{Title = "OK"}}
+        local contentLines = 0
+        if Data.Content then
+            -- Estimate wrapped height
+            local w = 332 -- inner width approx
+            pcall(function()
+                contentLines = math.ceil(TextService:GetTextSize(
+                    Data.Content, 15, Enum.Font.SourceSans, Vector2.new(w, 9999)).Y)
+            end)
+        end
+        local dlgH = 52 + 14 + math.max(contentLines, 18) + 14 + 46
 
-        TBtn.MouseButton1Click:Connect(function()
-            for _,t in pairs(Window._Tabs) do
-                TW(t.B,{BackgroundColor3=TAB_IDLE_BG,TextColor3=TAB_IDLE_TEXT},0.14)
-                t.A.BackgroundTransparency=1; t.C.Visible=false
-            end
-            TW(TBtn,{BackgroundColor3=TAB_ACTIVE_BG,TextColor3=TAB_ACTIVE_TEXT},0.14)
-            Acc.BackgroundTransparency=1
-            TC.Visible=true
-        end)
+        local DF = Instance.new("Frame")
+        DF.Size = UDim2.new(0, 400, 0, dlgH)
+        DF.AnchorPoint = Vector2.new(0.5, 0.5)
+        DF.Position = UDim2.new(0.5, 0, 0.5, 0)
+        DF.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+        DF.BorderSizePixel = 0
+        DF.ZIndex = 501
+        DF.Parent = Overlay
+        CC(DF, 10)
+        CS(DF, Color3.fromRGB(58, 68, 110), 1.5)
 
-        if #Window._Tabs==0 then
-            TBtn.BackgroundColor3=TAB_ACTIVE_BG
-            TBtn.TextColor3=TAB_ACTIVE_TEXT
-            Acc.BackgroundTransparency=1; TC.Visible=true
+        -- Top accent bar
+        local TopBar = Instance.new("Frame")
+        TopBar.Size = UDim2.new(1, 0, 0, 3)
+        TopBar.BackgroundColor3 = Color3.fromRGB(50, 130, 255)
+        TopBar.BorderSizePixel = 0; TopBar.ZIndex = 502; TopBar.Parent = DF
+        CC(TopBar, 10)
+
+        -- Title
+        MkLabel(DF, {
+            Size = UDim2.new(1, -24, 0, 38),
+            Position = UDim2.new(0, 14, 0, 8),
+            Text = Data.Title or "確認",
+            TextSize = 19,
+            Font = Enum.Font.GothamBold,
+            TextColor3 = Color3.fromRGB(240, 243, 255),
+            ZIndex = 502,
+        })
+
+        -- Separator
+        local Sep2 = Instance.new("Frame")
+        Sep2.Size = UDim2.new(1, -24, 0, 1)
+        Sep2.Position = UDim2.new(0, 12, 0, 48)
+        Sep2.BackgroundColor3 = Color3.fromRGB(38, 38, 58)
+        Sep2.BorderSizePixel = 0; Sep2.ZIndex = 502; Sep2.Parent = DF
+
+        -- Content
+        if Data.Content then
+            local CL = MkLabel(DF, {
+                Size = UDim2.new(1, -28, 0, math.max(contentLines, 18)),
+                Position = UDim2.new(0, 14, 0, 58),
+                Text = Data.Content,
+                TextSize = 15,
+                Font = Enum.Font.SourceSans,
+                TextColor3 = Color3.fromRGB(175, 182, 205),
+                TextWrapped = true,
+                ZIndex = 502,
+            })
+            CL.TextXAlignment = Enum.TextXAlignment.Left
         end
 
-        local Tab={B=TBtn,A=Acc,C=TC,Elements={}}
-        table.insert(Window._Tabs,Tab)
+        -- Buttons
+        local btnCount = #buttons
+        local btnAreaW = 400 - 28
+        local btnW = math.floor((btnAreaW - (btnCount - 1) * 10) / btnCount)
+
+        local function CloseDialog()
+            TW(DF, {BackgroundTransparency = 1}, 0.18, Enum.EasingStyle.Quint)
+            TW(Overlay, {BackgroundTransparency = 1}, 0.18, Enum.EasingStyle.Quint)
+            task.delay(0.22, function() pcall(function() Overlay:Destroy() end) end)
+        end
+
+        for i, btn in ipairs(buttons) do
+            local isPrimary = (i == 1)
+            local btnBG = btn.Color or (isPrimary and Color3.fromRGB(42, 105, 225) or Color3.fromRGB(26, 26, 38))
+            local BF = Instance.new("TextButton")
+            BF.Size = UDim2.new(0, btnW, 0, 36)
+            BF.Position = UDim2.new(0, 14 + (i - 1) * (btnW + 10), 1, -48)
+            BF.BackgroundColor3 = btnBG
+            BF.BorderSizePixel = 0
+            BF.Text = btn.Title or "OK"
+            BF.TextColor3 = Color3.fromRGB(230, 235, 255)
+            BF.TextSize = 15; BF.Font = Enum.Font.GothamSemibold
+            BF.AutoButtonColor = false; BF.ZIndex = 502; BF.Parent = DF
+            CC(BF, 7)
+            if not isPrimary then CS(BF, Color3.fromRGB(44, 44, 64), 1) end
+            BF.MouseEnter:Connect(function()
+                TW(BF, {BackgroundColor3 = isPrimary
+                    and Color3.fromRGB(58, 125, 255)
+                    or  Color3.fromRGB(36, 36, 52)}, 0.1)
+            end)
+            BF.MouseLeave:Connect(function()
+                TW(BF, {BackgroundColor3 = btnBG}, 0.1)
+            end)
+            BF.MouseButton1Click:Connect(function()
+                TW(BF, {BackgroundColor3 = isPrimary
+                    and Color3.fromRGB(35, 85, 185)
+                    or  Color3.fromRGB(22, 22, 32)}, 0.08)
+                CloseDialog()
+                if btn.Callback then task.defer(btn.Callback) end
+            end)
+        end
+
+        -- Animate in
+        DF.BackgroundTransparency = 1
+        DF.Size = UDim2.new(0, 370, 0, dlgH - 20)
+        TW(DF, {Size = UDim2.new(0, 400, 0, dlgH), BackgroundTransparency = 0},
+            0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    end
+
+    -- ================================================================
+    --  CreateTab
+    -- ================================================================
+    function Window:CreateTab(TabName, TabIcon)
+        local TBtn = Instance.new("TextButton")
+        TBtn.Size = UDim2.new(1, -8, 0, 44)
+        TBtn.BackgroundColor3 = TAB_IDLE_BG
+        TBtn.BorderSizePixel = 0
+        TBtn.Text = (TabIcon and (TabIcon .. "  ") or "  ") .. TabName
+        TBtn.TextColor3 = TAB_IDLE_TEXT
+        TBtn.TextSize = 17
+        TBtn.Font = Enum.Font.GothamSemibold
+        TBtn.TextXAlignment = Enum.TextXAlignment.Left
+        TBtn.AutoButtonColor = false; TBtn.Parent = TabScroll
+        CC(TBtn, 7)
+
+        local Acc = Instance.new("Frame")
+        Acc.Size = UDim2.new(0, 3, 0.55, 0); Acc.Position = UDim2.new(0, 0, 0.225, 0)
+        Acc.BackgroundColor3 = Color3.fromRGB(50, 150, 255)
+        Acc.BorderSizePixel = 0; Acc.BackgroundTransparency = 1; Acc.Parent = TBtn; CC(Acc, 100)
+
+        local TC = Instance.new("ScrollingFrame")
+        TC.Name = TabName .. "_C"; TC.Size = UDim2.new(1, 0, 1, 0)
+        TC.BackgroundTransparency = 1; TC.BorderSizePixel = 0
+        TC.ScrollBarThickness = 3; TC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+        TC.Visible = false; TC.Parent = CA
+        local CL = Instance.new("UIListLayout")
+        CL.Padding = UDim.new(0, 8); CL.SortOrder = Enum.SortOrder.LayoutOrder; CL.Parent = TC
+        local CP = Instance.new("UIPadding")
+        CP.PaddingTop = UDim.new(0, 8); CP.PaddingRight = UDim.new(0, 10); CP.Parent = TC
+        CL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            TC.CanvasSize = UDim2.new(0, 0, 0, CL.AbsoluteContentSize.Y + 18)
+        end)
+
+        local Tab = {B = TBtn, A = Acc, C = TC, Elements = {}}
+
+        local function ActivateTab()
+            for _, t in pairs(Window._Tabs) do
+                TW(t.B, {BackgroundColor3 = TAB_IDLE_BG, TextColor3 = TAB_IDLE_TEXT}, 0.14)
+                t.A.BackgroundTransparency = 1; t.C.Visible = false
+            end
+            TW(TBtn, {BackgroundColor3 = TAB_ACTIVE_BG, TextColor3 = TAB_ACTIVE_TEXT}, 0.14)
+            Acc.BackgroundTransparency = 1
+            TC.Visible = true
+        end
+
+        TBtn.MouseButton1Click:Connect(ActivateTab)
+
+        if #Window._Tabs == 0 then
+            TBtn.BackgroundColor3 = TAB_ACTIVE_BG
+            TBtn.TextColor3 = TAB_ACTIVE_TEXT
+            Acc.BackgroundTransparency = 1; TC.Visible = true
+        end
+
+        table.insert(Window._Tabs, Tab)
+
+        -- プログラムからタブを選択する
+        function Tab:Select()
+            ActivateTab()
+        end
 
         -- ================================================================
         --  要素ビルダー（コンテナを引数に取り、全要素を生成して返す）
-        --  ※ Tab直下 / CreateCollapsibleSection 両方で共用
         -- ================================================================
         local function buildCreators(container)
             local Creators = {}
 
             -- ── セクション ────────────────────────────────────────
+            -- [FIX] 戻り値を返すように修正、:Set() でテキスト更新可能
             function Creators:CreateSection(n)
-                local f=Instance.new("Frame")
-                f.Size=UDim2.new(1,0,0,26); f.BackgroundTransparency=1; f.Parent=container
-                MkLabel(f,{
-                    Size=UDim2.new(0.65,0,1,0),Position=UDim2.new(0,6,0,0),
-                    Text=n,TextColor3=Color3.fromRGB(85,125,175),TextSize=14,
-                    Font=Enum.Font.GothamSemibold,
+                local f = Instance.new("Frame")
+                f.Size = UDim2.new(1, 0, 0, 26); f.BackgroundTransparency = 1; f.Parent = container
+                local lbl = MkLabel(f, {
+                    Size = UDim2.new(0.65, 0, 1, 0), Position = UDim2.new(0, 6, 0, 0),
+                    Text = n, TextColor3 = Color3.fromRGB(85, 125, 175), TextSize = 14,
+                    Font = Enum.Font.GothamSemibold,
                 })
-                local ln=Instance.new("Frame")
-                ln.Size=UDim2.new(1,-8,0,1); ln.Position=UDim2.new(0,4,1,-1)
-                ln.BackgroundColor3=Color3.fromRGB(28,28,36); ln.BorderSizePixel=0; ln.Parent=f
+                local ln = Instance.new("Frame")
+                ln.Size = UDim2.new(1, -8, 0, 1); ln.Position = UDim2.new(0, 4, 1, -1)
+                ln.BackgroundColor3 = Color3.fromRGB(28, 28, 36); ln.BorderSizePixel = 0; ln.Parent = f
+                local Elem = {}
+                function Elem:Set(text) lbl.Text = text or "" end
+                function Elem:Get() return lbl.Text end
+                return Elem
             end
 
             -- ── ラベル ────────────────────────────────────────────
-            function Creators:CreateLabel(text)
-                local f=Instance.new("Frame")
-                f.Size=UDim2.new(1,0,0,28); f.BackgroundTransparency=1; f.Parent=container
-                MkLabel(f,{
-                    Size=UDim2.new(1,-18,1,0),Position=UDim2.new(0,12,0,0),
-                    Text=text or "",TextSize=14,Font=Enum.Font.SourceSans,
-                    TextColor3=Color3.fromRGB(145,150,168),TextWrapped=true,
+            -- [FIX] :Set()/:Get() が機能しないバグを修正、テキスト折り返しで高さ自動調整
+            function Creators:CreateLabel(text, color)
+                local f = Instance.new("Frame")
+                f.Size = UDim2.new(1, 0, 0, 28); f.BackgroundTransparency = 1; f.Parent = container
+                local lbl = MkLabel(f, {
+                    Size = UDim2.new(1, -18, 1, 0),
+                    Position = UDim2.new(0, 12, 0, 0),
+                    Text = text or "",
+                    TextSize = 14,
+                    Font = Enum.Font.SourceSans,
+                    TextColor3 = color or Color3.fromRGB(145, 150, 168),
+                    TextWrapped = true,
                 })
+
+                local function AutoResize()
+                    local w = math.max(lbl.AbsoluteSize.X > 0 and lbl.AbsoluteSize.X or 400, 80)
+                    local h
+                    pcall(function()
+                        h = TextService:GetTextSize(lbl.Text, 14, Enum.Font.SourceSans, Vector2.new(w, 9999)).Y
+                    end)
+                    h = h or 18
+                    f.Size = UDim2.new(1, 0, 0, math.max(28, h + 8))
+                    lbl.Size = UDim2.new(1, -18, 0, math.max(20, h + 4))
+                end
+                lbl:GetPropertyChangedSignal("AbsoluteSize"):Connect(AutoResize)
+                task.defer(AutoResize)
+
+                local Elem = {}
+                function Elem:Set(t, col)
+                    lbl.Text = t or ""
+                    if col then lbl.TextColor3 = col end
+                    task.defer(AutoResize)
+                end
+                function Elem:Get()
+                    return lbl.Text
+                end
+                return Elem
+            end
+
+            -- ── 区切り線 (NEW) ────────────────────────────────────
+            function Creators:CreateDivider(opts)
+                opts = opts or {}
+                local thickness = opts.Thickness or 1
+                local color = opts.Color or Color3.fromRGB(28, 28, 36)
+                local f = Instance.new("Frame")
+                f.Size = UDim2.new(1, 0, 0, thickness + 8)
+                f.BackgroundTransparency = 1
+                f.Parent = container
+                local ln = Instance.new("Frame")
+                ln.Size = UDim2.new(1, -16, 0, thickness)
+                ln.Position = UDim2.new(0, 8, 0.5, 0)
+                ln.BackgroundColor3 = color
+                ln.BorderSizePixel = 0
+                ln.Parent = f
+                CC(ln, 100)
             end
 
             -- ── パラグラフ ────────────────────────────────────────
+            -- [FIX] 戻り値を返すように修正、:Set() でコンテンツ更新可能
             function Creators:CreateParagraph(Data)
-                local f=Instance.new("Frame")
-                f.Size=UDim2.new(1,0,0,60); f.BackgroundColor3=Color3.fromRGB(18,18,22)
-                f.BorderSizePixel=0; f.Parent=container; CC(f,7); CS(f,Color3.fromRGB(34,34,42),1)
-                MkLabel(f,{
-                    Size=UDim2.new(1,-18,0,22),Position=UDim2.new(0,12,0,6),
-                    Text=Data.Title or "",TextSize=15,Font=Enum.Font.GothamSemibold,
-                    TextColor3=Color3.fromRGB(200,210,230),
+                local f = Instance.new("Frame")
+                f.Size = UDim2.new(1, 0, 0, 60); f.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+                f.BorderSizePixel = 0; f.Parent = container; CC(f, 7); CS(f, Color3.fromRGB(34, 34, 42), 1)
+                local titleLbl = MkLabel(f, {
+                    Size = UDim2.new(1, -18, 0, 22), Position = UDim2.new(0, 12, 0, 6),
+                    Text = Data.Title or "", TextSize = 15, Font = Enum.Font.GothamSemibold,
+                    TextColor3 = Color3.fromRGB(200, 210, 230),
                 })
-                local body=MkLabel(f,{
-                    Size=UDim2.new(1,-18,0,30),Position=UDim2.new(0,12,0,30),
-                    Text=Data.Content or "",TextSize=14,Font=Enum.Font.SourceSans,
-                    TextColor3=Color3.fromRGB(140,148,168),TextWrapped=true,
+                local body = MkLabel(f, {
+                    Size = UDim2.new(1, -18, 0, 30), Position = UDim2.new(0, 12, 0, 30),
+                    Text = Data.Content or "", TextSize = 14, Font = Enum.Font.SourceSans,
+                    TextColor3 = Color3.fromRGB(140, 148, 168), TextWrapped = true,
                 })
                 local function resize()
-                    local ts=game:GetService("TextService")
-                    local h=ts:GetTextSize(body.Text,14,Enum.Font.SourceSans,
-                        Vector2.new(body.AbsoluteSize.X,9999)).Y
-                    body.Size=UDim2.new(1,-18,0,h+4)
-                    f.Size=UDim2.new(1,0,0,h+44)
+                    local h
+                    pcall(function()
+                        h = TextService:GetTextSize(body.Text, 14, Enum.Font.SourceSans,
+                            Vector2.new(math.max(body.AbsoluteSize.X, 80), 9999)).Y
+                    end)
+                    h = h or 30
+                    body.Size = UDim2.new(1, -18, 0, h + 4)
+                    f.Size = UDim2.new(1, 0, 0, h + 44)
                 end
                 body:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
                 task.defer(resize)
+
+                local Elem = {}
+                function Elem:Set(title, content)
+                    if title  ~= nil then titleLbl.Text = title  end
+                    if content ~= nil then body.Text = content; task.defer(resize) end
+                end
+                function Elem:Get()
+                    return {Title = titleLbl.Text, Content = body.Text}
+                end
+                return Elem
             end
 
             -- ── ボタン ────────────────────────────────────────────
+            -- [FIX] 戻り値を返すように修正
             function Creators:CreateButton(Data)
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-                local B=Instance.new("TextButton")
-                B.Size=UDim2.new(1,0,1,0); B.BackgroundTransparency=1
-                B.Text=Data.Name or "ボタン"; B.TextColor3=Color3.fromRGB(235,235,245)
-                B.TextSize=17; B.Font=Enum.Font.SourceSansSemibold; B.Parent=F
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                local B = Instance.new("TextButton")
+                B.Size = UDim2.new(1, 0, 1, 0); B.BackgroundTransparency = 1
+                B.Text = Data.Name or "ボタン"; B.TextColor3 = Color3.fromRGB(235, 235, 245)
+                B.TextSize = 17; B.Font = Enum.Font.SourceSansSemibold; B.Parent = F
                 B.MouseButton1Click:Connect(function()
-                    TW(F,{BackgroundColor3=Color3.fromRGB(30,30,38)},0.08)
-                    task.delay(0.08,function() TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.12) end)
+                    TW(F, {BackgroundColor3 = Color3.fromRGB(30, 30, 38)}, 0.08)
+                    task.delay(0.08, function() TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.12) end)
                     if Data.Callback then pcall(Data.Callback) end
-                    AddLog("実行: "..(Data.Name or "?"),"Action")
+                    AddLog("実行: " .. (Data.Name or "?"), "Action")
                 end)
+                B.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(26, 26, 32)}, 0.08) end)
+                B.MouseLeave:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.08) end)
+                local Elem = {}
+                function Elem:SetName(name)
+                    B.Text = name or ""
+                    Data.Name = name
+                end
+                function Elem:SetCallback(cb)
+                    Data.Callback = cb
+                end
+                return Elem
             end
 
             -- ── トグル ────────────────────────────────────────────
             function Creators:CreateToggle(Data)
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-                MkLabel(F,{
-                    Size=UDim2.new(1,-72,1,0),Position=UDim2.new(0,14,0,0),
-                    Text=Data.Name or "トグル",TextSize=17,Font=Enum.Font.SourceSans,
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                MkLabel(F, {
+                    Size = UDim2.new(1, -72, 1, 0), Position = UDim2.new(0, 14, 0, 0),
+                    Text = Data.Name or "トグル", TextSize = 17, Font = Enum.Font.SourceSans,
                 })
-                local Trk=Instance.new("Frame")
-                Trk.Size=UDim2.new(0,48,0,24); Trk.Position=UDim2.new(1,-58,0.5,-12)
-                Trk.BackgroundColor3=Color3.fromRGB(36,36,44); Trk.BorderSizePixel=0
-                Trk.Parent=F; CC(Trk,100)
-                local Cir=Instance.new("Frame")
-                Cir.Size=UDim2.new(0,20,0,20); Cir.Position=UDim2.new(0,2,0.5,-10)
-                Cir.BackgroundColor3=Color3.fromRGB(185,185,200); Cir.BorderSizePixel=0
-                Cir.Parent=Trk; CC(Cir,100)
-                local HitBtn=Instance.new("TextButton")
-                HitBtn.Size=UDim2.new(1,0,1,0); HitBtn.Position=UDim2.new(0,0,0,0)
-                HitBtn.BackgroundTransparency=1; HitBtn.Text=""
-                HitBtn.AutoButtonColor=false; HitBtn.ZIndex=5; HitBtn.Parent=F
-                local val=Data.CurrentValue or false
+                local Trk = Instance.new("Frame")
+                Trk.Size = UDim2.new(0, 48, 0, 24); Trk.Position = UDim2.new(1, -58, 0.5, -12)
+                Trk.BackgroundColor3 = Color3.fromRGB(36, 36, 44); Trk.BorderSizePixel = 0
+                Trk.Parent = F; CC(Trk, 100)
+                local Cir = Instance.new("Frame")
+                Cir.Size = UDim2.new(0, 20, 0, 20); Cir.Position = UDim2.new(0, 2, 0.5, -10)
+                Cir.BackgroundColor3 = Color3.fromRGB(185, 185, 200); Cir.BorderSizePixel = 0
+                Cir.Parent = Trk; CC(Cir, 100)
+                local HitBtn = Instance.new("TextButton")
+                HitBtn.Size = UDim2.new(1, 0, 1, 0); HitBtn.Position = UDim2.new(0, 0, 0, 0)
+                HitBtn.BackgroundTransparency = 1; HitBtn.Text = ""
+                HitBtn.AutoButtonColor = false; HitBtn.ZIndex = 5; HitBtn.Parent = F
+                local val = Data.CurrentValue or false
                 local function ApplyVisual(v, animate)
                     if v then
-                        if animate then TW(Trk,{BackgroundColor3=Color3.fromRGB(42,138,242)},0.18)
-                                         TW(Cir,{Position=UDim2.new(1,-22,0.5,-10)},0.18)
-                        else Trk.BackgroundColor3=Color3.fromRGB(42,138,242)
-                             Cir.Position=UDim2.new(1,-22,0.5,-10) end
+                        if animate then
+                            TW(Trk, {BackgroundColor3 = Color3.fromRGB(42, 138, 242)}, 0.18)
+                            TW(Cir, {Position = UDim2.new(1, -22, 0.5, -10)}, 0.18)
+                        else
+                            Trk.BackgroundColor3 = Color3.fromRGB(42, 138, 242)
+                            Cir.Position = UDim2.new(1, -22, 0.5, -10)
+                        end
                     else
-                        if animate then TW(Trk,{BackgroundColor3=Color3.fromRGB(36,36,44)},0.18)
-                                         TW(Cir,{Position=UDim2.new(0,2,0.5,-10)},0.18)
-                        else Trk.BackgroundColor3=Color3.fromRGB(36,36,44)
-                             Cir.Position=UDim2.new(0,2,0.5,-10) end
+                        if animate then
+                            TW(Trk, {BackgroundColor3 = Color3.fromRGB(36, 36, 44)}, 0.18)
+                            TW(Cir, {Position = UDim2.new(0, 2, 0.5, -10)}, 0.18)
+                        else
+                            Trk.BackgroundColor3 = Color3.fromRGB(36, 36, 44)
+                            Cir.Position = UDim2.new(0, 2, 0.5, -10)
+                        end
                     end
                 end
                 ApplyVisual(val, false)
-                HitBtn.MouseEnter:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.08) end)
-                HitBtn.MouseLeave:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.08) end)
+                HitBtn.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(26, 26, 32)}, 0.08) end)
+                HitBtn.MouseLeave:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.08) end)
                 HitBtn.MouseButton1Click:Connect(function()
-                    val=not val; ApplyVisual(val, true)
-                    if Data.Callback then pcall(Data.Callback,val) end
-                    MyEngine.Flags[Data.Flag or Data.Name or ""]=val
-                    AddLog("トグル: "..(Data.Name or "?").." = "..tostring(val),"Action")
+                    val = not val; ApplyVisual(val, true)
+                    if Data.Callback then pcall(Data.Callback, val) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = val
+                    AddLog("トグル: " .. (Data.Name or "?") .. " = " .. tostring(val), "Action")
                 end)
-                local Elem={}
-                function Elem:Set(v) val=v; ApplyVisual(val,true)
-                    if Data.Callback then pcall(Data.Callback,val) end
-                    MyEngine.Flags[Data.Flag or Data.Name or ""]=val
+                local Elem = {}
+                function Elem:Set(v)
+                    val = v; ApplyVisual(val, true)
+                    if Data.Callback then pcall(Data.Callback, val) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = val
                 end
                 function Elem:Get() return val end
                 return Elem
@@ -763,507 +1003,706 @@ function MyEngine:CreateWindow(Config)
 
             -- ── スライダー ────────────────────────────────────────
             function Creators:CreateSlider(Data)
-                local Min=Data.Range[1]; local Max=Data.Range[2]
-                local Inc=Data.Increment or 1
-                local cur=math.clamp(Data.CurrentValue or Min,Min,Max)
-                local dr=false
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,54); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-                MkLabel(F,{
-                    Size=UDim2.new(1,-90,0,30),Position=UDim2.new(0,14,0,0),
-                    Text=Data.Name or "スライダー",TextSize=17,Font=Enum.Font.SourceSans,
-                    TextColor3=Color3.fromRGB(220,225,240),
+                local Min = Data.Range[1]; local Max = Data.Range[2]
+                local Inc = Data.Increment or 1
+                local cur = math.clamp(Data.CurrentValue or Min, Min, Max)
+                local dr = false
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 54); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                MkLabel(F, {
+                    Size = UDim2.new(1, -90, 0, 30), Position = UDim2.new(0, 14, 0, 0),
+                    Text = Data.Name or "スライダー", TextSize = 17, Font = Enum.Font.SourceSans,
+                    TextColor3 = Color3.fromRGB(220, 225, 240),
                 })
-                local VL=MkLabel(F,{
-                    Size=UDim2.new(0,72,0,30),Position=UDim2.new(1,-80,0,0),
-                    Text="",TextColor3=Color3.fromRGB(50,138,220),TextSize=15,
-                    Font=Enum.Font.GothamSemibold,TextXAlignment=Enum.TextXAlignment.Right,
+                local VL = MkLabel(F, {
+                    Size = UDim2.new(0, 72, 0, 30), Position = UDim2.new(1, -80, 0, 0),
+                    Text = "", TextColor3 = Color3.fromRGB(50, 138, 220), TextSize = 15,
+                    Font = Enum.Font.GothamSemibold, TextXAlignment = Enum.TextXAlignment.Right,
                 })
-                local TrkBG=Instance.new("Frame")
-                TrkBG.Size=UDim2.new(1,-28,0,8); TrkBG.Position=UDim2.new(0,14,1,-18)
-                TrkBG.BackgroundColor3=Color3.fromRGB(25,25,30)
-                TrkBG.BorderSizePixel=0; TrkBG.ZIndex=2; TrkBG.Parent=F; CC(TrkBG,100)
-                CS(TrkBG,Color3.fromRGB(40,40,52),1)
-                local Fil=Instance.new("Frame")
-                Fil.Size=UDim2.new(0,0,1,0); Fil.BackgroundColor3=Color3.fromRGB(50,138,220)
-                Fil.BorderSizePixel=0; Fil.ZIndex=3; Fil.Parent=TrkBG; CC(Fil,100)
-                local FilStroke=Instance.new("UIStroke")
-                FilStroke.Color=Color3.fromRGB(58,163,255); FilStroke.Thickness=1.2
-                FilStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; FilStroke.Parent=Fil
-                local Hit=Instance.new("TextButton")
-                Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1
-                Hit.Text=""; Hit.AutoButtonColor=false; Hit.ZIndex=10; Hit.Parent=F
+                local TrkBG = Instance.new("Frame")
+                TrkBG.Size = UDim2.new(1, -28, 0, 8); TrkBG.Position = UDim2.new(0, 14, 1, -18)
+                TrkBG.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+                TrkBG.BorderSizePixel = 0; TrkBG.ZIndex = 2; TrkBG.Parent = F; CC(TrkBG, 100)
+                CS(TrkBG, Color3.fromRGB(40, 40, 52), 1)
+                local Fil = Instance.new("Frame")
+                Fil.Size = UDim2.new(0, 0, 1, 0); Fil.BackgroundColor3 = Color3.fromRGB(50, 138, 220)
+                Fil.BorderSizePixel = 0; Fil.ZIndex = 3; Fil.Parent = TrkBG; CC(Fil, 100)
+                local FilStroke = Instance.new("UIStroke")
+                FilStroke.Color = Color3.fromRGB(58, 163, 255); FilStroke.Thickness = 1.2
+                FilStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; FilStroke.Parent = Fil
+                local Hit = Instance.new("TextButton")
+                Hit.Size = UDim2.new(1, 0, 1, 0); Hit.BackgroundTransparency = 1
+                Hit.Text = ""; Hit.AutoButtonColor = false; Hit.ZIndex = 10; Hit.Parent = F
                 local function MouseRatio()
-                    local ax=TrkBG.AbsolutePosition.X; local aw=TrkBG.AbsoluteSize.X
-                    if aw<=0 then return 0 end
-                    return math.clamp((UserInputService:GetMouseLocation().X-ax)/aw,0,1)
+                    local ax = TrkBG.AbsolutePosition.X; local aw = TrkBG.AbsoluteSize.X
+                    if aw <= 0 then return 0 end
+                    return math.clamp((UserInputService:GetMouseLocation().X - ax) / aw, 0, 1)
                 end
                 local function Upd(v)
-                    v=math.clamp(math.floor(v/Inc+0.5)*Inc,Min,Max); cur=v
-                    local ratio=(Max==Min) and 0 or (v-Min)/(Max-Min)
-                    Fil.Size=UDim2.new(ratio,0,1,0)
-                    VL.Text=tostring(v)..(Data.Suffix or "")
-                    MyEngine.Flags[Data.Flag or Data.Name or ""]=v
+                    v = math.clamp(math.floor(v / Inc + 0.5) * Inc, Min, Max); cur = v
+                    local ratio = (Max == Min) and 0 or (v - Min) / (Max - Min)
+                    Fil.Size = UDim2.new(ratio, 0, 1, 0)
+                    VL.Text = tostring(v) .. (Data.Suffix or "")
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = v
                 end
                 Upd(cur)
                 Hit.InputBegan:Connect(function(i)
-                    if i.UserInputType~=Enum.UserInputType.MouseButton1 then return end
-                    dr=true; Upd(Min+(Max-Min)*MouseRatio())
-                    TW(Fil,{BackgroundColor3=Color3.fromRGB(65,155,255)},0.1)
-                    TW(FilStroke,{Color=Color3.fromRGB(90,185,255)},0.1)
+                    if i.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+                    dr = true; Upd(Min + (Max - Min) * MouseRatio())
+                    TW(Fil, {BackgroundColor3 = Color3.fromRGB(65, 155, 255)}, 0.1)
+                    TW(FilStroke, {Color = Color3.fromRGB(90, 185, 255)}, 0.1)
                 end)
                 UserInputService.InputChanged:Connect(function(i)
-                    if dr and i.UserInputType==Enum.UserInputType.MouseMovement then
-                        Upd(Min+(Max-Min)*MouseRatio())
+                    if dr and i.UserInputType == Enum.UserInputType.MouseMovement then
+                        Upd(Min + (Max - Min) * MouseRatio())
                     end
                 end)
                 UserInputService.InputEnded:Connect(function(i)
-                    if i.UserInputType==Enum.UserInputType.MouseButton1 and dr then
-                        dr=false
-                        TW(Fil,{BackgroundColor3=Color3.fromRGB(50,138,220)},0.15)
-                        TW(FilStroke,{Color=Color3.fromRGB(58,163,255)},0.15)
-                        if Data.Callback then pcall(Data.Callback,cur) end
-                        AddLog((Data.Name or "スライダー").." = "..tostring(cur),"Action")
+                    if i.UserInputType == Enum.UserInputType.MouseButton1 and dr then
+                        dr = false
+                        TW(Fil, {BackgroundColor3 = Color3.fromRGB(50, 138, 220)}, 0.15)
+                        TW(FilStroke, {Color = Color3.fromRGB(58, 163, 255)}, 0.15)
+                        if Data.Callback then pcall(Data.Callback, cur) end
+                        AddLog((Data.Name or "スライダー") .. " = " .. tostring(cur), "Action")
                     end
                 end)
-                Hit.MouseEnter:Connect(function() TW(F,{BackgroundColor3=Color3.fromRGB(25,25,30)},0.1) end)
+                Hit.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(25, 25, 30)}, 0.1) end)
                 Hit.MouseLeave:Connect(function()
-                    if not dr then TW(F,{BackgroundColor3=Color3.fromRGB(20,20,24)},0.1) end
+                    if not dr then TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.1) end
                 end)
-                local Elem={}
-                function Elem:Set(v) Upd(v); if Data.Callback then pcall(Data.Callback,cur) end end
+                local Elem = {}
+                function Elem:Set(v) Upd(v); if Data.Callback then pcall(Data.Callback, cur) end end
                 function Elem:Get() return cur end
+                return Elem
+            end
+
+            -- ── プログレスバー (NEW) ─────────────────────────────
+            function Creators:CreateProgressBar(Data)
+                local Min = Data.MinValue or 0
+                local Max = Data.MaxValue or 100
+                local cur = math.clamp(Data.CurrentValue or Min, Min, Max)
+                local barColor = Data.Color or Color3.fromRGB(50, 138, 220)
+
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 54); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                MkLabel(F, {
+                    Size = UDim2.new(1, -90, 0, 30), Position = UDim2.new(0, 14, 0, 0),
+                    Text = Data.Name or "進行状況", TextSize = 17, Font = Enum.Font.SourceSans,
+                    TextColor3 = Color3.fromRGB(220, 225, 240),
+                })
+                local VL = MkLabel(F, {
+                    Size = UDim2.new(0, 72, 0, 30), Position = UDim2.new(1, -80, 0, 0),
+                    Text = "", TextColor3 = barColor, TextSize = 15,
+                    Font = Enum.Font.GothamSemibold, TextXAlignment = Enum.TextXAlignment.Right,
+                })
+                local TrkBG = Instance.new("Frame")
+                TrkBG.Size = UDim2.new(1, -28, 0, 8); TrkBG.Position = UDim2.new(0, 14, 1, -18)
+                TrkBG.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+                TrkBG.BorderSizePixel = 0; TrkBG.ZIndex = 2; TrkBG.Parent = F; CC(TrkBG, 100)
+                CS(TrkBG, Color3.fromRGB(40, 40, 52), 1)
+                local Fil = Instance.new("Frame")
+                Fil.Size = UDim2.new(0, 0, 1, 0); Fil.BackgroundColor3 = barColor
+                Fil.BorderSizePixel = 0; Fil.ZIndex = 3; Fil.Parent = TrkBG; CC(Fil, 100)
+
+                local function Upd(v, animate)
+                    v = math.clamp(v, Min, Max); cur = v
+                    local ratio = (Max == Min) and 0 or (v - Min) / (Max - Min)
+                    if animate then
+                        TW(Fil, {Size = UDim2.new(ratio, 0, 1, 0)}, 0.35, Enum.EasingStyle.Quint)
+                    else
+                        Fil.Size = UDim2.new(ratio, 0, 1, 0)
+                    end
+                    VL.Text = tostring(math.floor(v * 10) / 10) .. (Data.Suffix or "")
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = v
+                end
+                Upd(cur, false)
+
+                local Elem = {}
+                function Elem:Set(v, noAnimate)
+                    Upd(v, not noAnimate)
+                end
+                function Elem:Get() return cur end
+                function Elem:SetColor(col)
+                    barColor = col
+                    Fil.BackgroundColor3 = col
+                    VL.TextColor3 = col
+                end
                 return Elem
             end
 
             -- ── ドロップダウン ────────────────────────────────────
             function Creators:CreateDropdown(Data)
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-                local DB=Instance.new("TextButton")
-                DB.Size=UDim2.new(1,0,1,0); DB.BackgroundTransparency=1
-                DB.Text="  "..(Data.Name or "選択")..":  "..(Data.CurrentOption or "未選択")
-                DB.TextColor3=Color3.fromRGB(235,235,245); DB.TextSize=17
-                DB.Font=Enum.Font.SourceSans; DB.TextXAlignment=Enum.TextXAlignment.Left; DB.Parent=F
-                local Arr=MkLabel(F,{
-                    Size=UDim2.new(0,24,1,0),Position=UDim2.new(1,-28,0,0),
-                    Text="▾",TextColor3=Color3.fromRGB(95,115,145),TextSize=16,
-                    Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Center,
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                local DB = Instance.new("TextButton")
+                DB.Size = UDim2.new(1, 0, 1, 0); DB.BackgroundTransparency = 1
+                DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. (Data.CurrentOption or "未選択")
+                DB.TextColor3 = Color3.fromRGB(235, 235, 245); DB.TextSize = 17
+                DB.Font = Enum.Font.SourceSans; DB.TextXAlignment = Enum.TextXAlignment.Left; DB.Parent = F
+                DB.TextTruncate = Enum.TextTruncate.AtEnd
+                local Arr = MkLabel(F, {
+                    Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(1, -28, 0, 0),
+                    Text = "▾", TextColor3 = Color3.fromRGB(95, 115, 145), TextSize = 16,
+                    Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center,
                 })
-                local OC=Instance.new("Frame")
-                OC.Size=UDim2.new(1,0,0,0); OC.Position=UDim2.new(0,0,1,3)
-                OC.BackgroundColor3=Color3.fromRGB(16,16,20); OC.BorderSizePixel=0
-                OC.Visible=false; OC.ZIndex=10; OC.Parent=F; CC(OC,7); CS(OC,Color3.fromRGB(34,34,42),1)
-                Instance.new("UIListLayout").Parent=OC
-                local op=false
+                local OC = Instance.new("Frame")
+                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 1, 3)
+                OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
+                OC.Visible = false; OC.ZIndex = 10; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
+                Instance.new("UIListLayout").Parent = OC
+                local op = false
                 DB.MouseButton1Click:Connect(function()
-                    op=not op; OC.Visible=op
+                    op = not op; OC.Visible = op
                     if op then
-                        local h=math.min(#(Data.Options or {})*34,185)
-                        TW(OC,{Size=UDim2.new(1,0,0,h)},0.18)
-                        TW(F,{Size=UDim2.new(1,0,0,44+h+4)},0.18); Arr.Text="▴"
+                        local h = math.min(#(Data.Options or {}) * 34, 185)
+                        TW(OC, {Size = UDim2.new(1, 0, 0, h)}, 0.18)
+                        TW(F, {Size = UDim2.new(1, 0, 0, 44 + h + 4)}, 0.18); Arr.Text = "▴"
                     else
-                        TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
-                        TW(F,{Size=UDim2.new(1,0,0,44)},0.18); Arr.Text="▾"
+                        TW(OC, {Size = UDim2.new(1, 0, 0, 0)}, 0.18)
+                        TW(F, {Size = UDim2.new(1, 0, 0, 44)}, 0.18); Arr.Text = "▾"
                     end
                 end)
-                for _,opt in pairs(Data.Options or {}) do
-                    local OB=Instance.new("TextButton")
-                    OB.Size=UDim2.new(1,0,0,34); OB.BackgroundColor3=Color3.fromRGB(20,20,26)
-                    OB.BorderSizePixel=0; OB.Text="  "..opt
-                    OB.TextColor3=Color3.fromRGB(195,200,215); OB.TextSize=16
-                    OB.Font=Enum.Font.SourceSans; OB.TextXAlignment=Enum.TextXAlignment.Left
-                    OB.AutoButtonColor=false; OB.ZIndex=11; OB.Parent=OC
-                    OB.MouseEnter:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(28,28,36)},0.08) end)
-                    OB.MouseLeave:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.08) end)
+                local function AddOption(opt)
+                    local OB = Instance.new("TextButton")
+                    OB.Size = UDim2.new(1, 0, 0, 34); OB.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+                    OB.BorderSizePixel = 0; OB.Text = "  " .. opt
+                    OB.TextColor3 = Color3.fromRGB(195, 200, 215); OB.TextSize = 16
+                    OB.Font = Enum.Font.SourceSans; OB.TextXAlignment = Enum.TextXAlignment.Left
+                    OB.AutoButtonColor = false; OB.ZIndex = 11; OB.Parent = OC
+                    OB.MouseEnter:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(28, 28, 36)}, 0.08) end)
+                    OB.MouseLeave:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end)
                     OB.MouseButton1Click:Connect(function()
-                        DB.Text="  "..(Data.Name or "選択")..":  "..opt
-                        op=false; OC.Visible=false; Arr.Text="▾"
-                        TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
-                        TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
-                        if Data.Callback then pcall(Data.Callback,opt) end
-                        MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
+                        DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. opt
+                        op = false; OC.Visible = false; Arr.Text = "▾"
+                        TW(OC, {Size = UDim2.new(1, 0, 0, 0)}, 0.18)
+                        TW(F, {Size = UDim2.new(1, 0, 0, 44)}, 0.18)
+                        if Data.Callback then pcall(Data.Callback, opt) end
+                        MyEngine.Flags[Data.Flag or Data.Name or ""] = opt
                     end)
                 end
-                local Elem={}
+                for _, opt in pairs(Data.Options or {}) do AddOption(opt) end
+                local Elem = {}
                 function Elem:Set(opt)
-                    DB.Text="  "..(Data.Name or "選択")..":  "..opt
-                    op=false; OC.Visible=false; Arr.Text="▾"
-                    TW(OC,{Size=UDim2.new(1,0,0,0)},0.18); TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
-                    if Data.Callback then pcall(Data.Callback,opt) end
-                    MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
+                    DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. opt
+                    op = false; OC.Visible = false; Arr.Text = "▾"
+                    TW(OC, {Size = UDim2.new(1, 0, 0, 0)}, 0.18); TW(F, {Size = UDim2.new(1, 0, 0, 44)}, 0.18)
+                    if Data.Callback then pcall(Data.Callback, opt) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = opt
                 end
                 function Elem:Refresh(newOptions)
-                    for _,c in pairs(OC:GetChildren()) do
+                    for _, c in pairs(OC:GetChildren()) do
                         if c:IsA("TextButton") then c:Destroy() end
                     end
                     Data.Options = newOptions
-                    for _,opt in pairs(newOptions or {}) do
-                        local OB=Instance.new("TextButton")
-                        OB.Size=UDim2.new(1,0,0,34); OB.BackgroundColor3=Color3.fromRGB(20,20,26)
-                        OB.BorderSizePixel=0; OB.Text="  "..opt
-                        OB.TextColor3=Color3.fromRGB(195,200,215); OB.TextSize=16
-                        OB.Font=Enum.Font.SourceSans; OB.TextXAlignment=Enum.TextXAlignment.Left
-                        OB.AutoButtonColor=false; OB.ZIndex=11; OB.Parent=OC
-                        OB.MouseEnter:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(28,28,36)},0.08) end)
-                        OB.MouseLeave:Connect(function() TW(OB,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.08) end)
-                        OB.MouseButton1Click:Connect(function()
-                            DB.Text="  "..(Data.Name or "選択")..":  "..opt
-                            op=false; OC.Visible=false; Arr.Text="▾"
-                            TW(OC,{Size=UDim2.new(1,0,0,0)},0.18)
-                            TW(F,{Size=UDim2.new(1,0,0,44)},0.18)
-                            if Data.Callback then pcall(Data.Callback,opt) end
-                            MyEngine.Flags[Data.Flag or Data.Name or ""]=opt
-                        end)
-                    end
+                    for _, opt in pairs(newOptions or {}) do AddOption(opt) end
                 end
-                function Elem:Get() local t=DB.Text:match(":  (.+)$"); return t end
+                function Elem:Get()
+                    local t = DB.Text:match(":  (.+)$"); return t
+                end
+                return Elem
+            end
+
+            -- ── マルチドロップダウン (NEW) ────────────────────────
+            function Creators:CreateMultiDropdown(Data)
+                -- Data: {Name, Options, CurrentOptions, Callback, Flag, MaxSelection}
+                local selected = {}
+                for _, v in pairs(Data.CurrentOptions or {}) do
+                    selected[v] = true
+                end
+                local maxSel = Data.MaxSelection or math.huge
+
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+
+                local function getSelectedText()
+                    local keys = {}
+                    for k in pairs(selected) do table.insert(keys, k) end
+                    if #keys == 0 then return "  " .. (Data.Name or "選択") .. ":  未選択" end
+                    return "  " .. (Data.Name or "選択") .. ":  " .. table.concat(keys, ", ")
+                end
+
+                local DB = Instance.new("TextButton")
+                DB.Size = UDim2.new(1, 0, 1, 0); DB.BackgroundTransparency = 1
+                DB.Text = getSelectedText()
+                DB.TextColor3 = Color3.fromRGB(235, 235, 245); DB.TextSize = 15
+                DB.Font = Enum.Font.SourceSans; DB.TextXAlignment = Enum.TextXAlignment.Left
+                DB.TextTruncate = Enum.TextTruncate.AtEnd; DB.Parent = F
+
+                local Arr = MkLabel(F, {
+                    Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(1, -28, 0, 0),
+                    Text = "▾", TextColor3 = Color3.fromRGB(95, 115, 145), TextSize = 16,
+                    Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center,
+                })
+
+                local OC = Instance.new("ScrollingFrame")
+                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 1, 3)
+                OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
+                OC.ScrollBarThickness = 2; OC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+                OC.Visible = false; OC.ZIndex = 10; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
+                local OCL = Instance.new("UIListLayout"); OCL.Parent = OC
+                OCL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                    OC.CanvasSize = UDim2.new(0, 0, 0, OCL.AbsoluteContentSize.Y)
+                end)
+
+                local op = false
+                local optionBtns = {}
+
+                local function UpdateDisplay()
+                    DB.Text = getSelectedText()
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = selected
+                    if Data.Callback then pcall(Data.Callback, selected) end
+                end
+
+                local function MakeOption(opt)
+                    local ORow = Instance.new("Frame")
+                    ORow.Size = UDim2.new(1, 0, 0, 34); ORow.BorderSizePixel = 0; ORow.ZIndex = 11
+                    ORow.BackgroundColor3 = selected[opt] and Color3.fromRGB(26, 42, 70) or Color3.fromRGB(20, 20, 26)
+                    ORow.Parent = OC
+
+                    local CB = Instance.new("Frame")
+                    CB.Size = UDim2.new(0, 16, 0, 16); CB.Position = UDim2.new(0, 10, 0.5, -8)
+                    CB.BackgroundColor3 = selected[opt] and Color3.fromRGB(42, 138, 242) or Color3.fromRGB(32, 32, 44)
+                    CB.BorderSizePixel = 0; CB.ZIndex = 12; CB.Parent = ORow
+                    CC(CB, 4)
+
+                    local Check = MkLabel(CB, {
+                        Size = UDim2.new(1, 0, 1, 0),
+                        Text = selected[opt] and "✓" or "",
+                        TextSize = 11, Font = Enum.Font.GothamBold,
+                        TextColor3 = Color3.fromRGB(255, 255, 255),
+                        TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 13,
+                    })
+
+                    local OBBtn = Instance.new("TextButton")
+                    OBBtn.Size = UDim2.new(1, -36, 1, 0); OBBtn.Position = UDim2.new(0, 34, 0, 0)
+                    OBBtn.BackgroundTransparency = 1; OBBtn.Text = opt
+                    OBBtn.TextColor3 = Color3.fromRGB(195, 200, 215); OBBtn.TextSize = 15
+                    OBBtn.Font = Enum.Font.SourceSans; OBBtn.TextXAlignment = Enum.TextXAlignment.Left
+                    OBBtn.AutoButtonColor = false; OBBtn.ZIndex = 12; OBBtn.Parent = ORow
+
+                    OBBtn.MouseEnter:Connect(function()
+                        if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(26, 26, 34)}, 0.08) end
+                    end)
+                    OBBtn.MouseLeave:Connect(function()
+                        if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end
+                    end)
+                    OBBtn.MouseButton1Click:Connect(function()
+                        if selected[opt] then
+                            selected[opt] = nil
+                            TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.12)
+                            TW(CB, {BackgroundColor3 = Color3.fromRGB(32, 32, 44)}, 0.12)
+                            Check.Text = ""
+                        else
+                            local count = 0
+                            for _ in pairs(selected) do count = count + 1 end
+                            if count >= maxSel then
+                                TW(ORow, {BackgroundColor3 = Color3.fromRGB(60, 25, 25)}, 0.08)
+                                task.delay(0.2, function() TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.15) end)
+                                return
+                            end
+                            selected[opt] = true
+                            TW(ORow, {BackgroundColor3 = Color3.fromRGB(26, 42, 70)}, 0.12)
+                            TW(CB, {BackgroundColor3 = Color3.fromRGB(42, 138, 242)}, 0.12)
+                            Check.Text = "✓"
+                        end
+                        UpdateDisplay()
+                    end)
+
+                    optionBtns[opt] = {Frame = ORow, Check = Check, CB = CB}
+                end
+
+                for _, opt in pairs(Data.Options or {}) do MakeOption(opt) end
+
+                DB.MouseButton1Click:Connect(function()
+                    op = not op; OC.Visible = op
+                    if op then
+                        local h = math.min(#(Data.Options or {}) * 34, 185)
+                        TW(OC, {Size = UDim2.new(1, 0, 0, h)}, 0.18)
+                        TW(F, {Size = UDim2.new(1, 0, 0, 44 + h + 4)}, 0.18); Arr.Text = "▴"
+                    else
+                        TW(OC, {Size = UDim2.new(1, 0, 0, 0)}, 0.18)
+                        TW(F, {Size = UDim2.new(1, 0, 0, 44)}, 0.18); Arr.Text = "▾"
+                    end
+                end)
+
+                local Elem = {}
+                function Elem:Set(optTable)
+                    selected = {}
+                    for _, v in pairs(optTable or {}) do selected[v] = true end
+                    for opt, btns in pairs(optionBtns) do
+                        if selected[opt] then
+                            btns.Frame.BackgroundColor3 = Color3.fromRGB(26, 42, 70)
+                            btns.CB.BackgroundColor3 = Color3.fromRGB(42, 138, 242)
+                            btns.Check.Text = "✓"
+                        else
+                            btns.Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+                            btns.CB.BackgroundColor3 = Color3.fromRGB(32, 32, 44)
+                            btns.Check.Text = ""
+                        end
+                    end
+                    UpdateDisplay()
+                end
+                function Elem:Get()
+                    local t = {}
+                    for k in pairs(selected) do table.insert(t, k) end
+                    return t
+                end
+                function Elem:Refresh(newOptions)
+                    for _, c in pairs(OC:GetChildren()) do
+                        if c:IsA("Frame") then c:Destroy() end
+                    end
+                    optionBtns = {}; selected = {}; Data.Options = newOptions
+                    for _, opt in pairs(newOptions or {}) do MakeOption(opt) end
+                    UpdateDisplay()
+                end
                 return Elem
             end
 
             -- ── キーバインド設定 ──────────────────────────────────
             function Creators:CreateKeybind(Data)
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-                MkLabel(F,{
-                    Size=UDim2.new(1,-118,1,0),Position=UDim2.new(0,14,0,0),
-                    Text=Data.Name or "キーバインド",TextSize=17,Font=Enum.Font.SourceSans,
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                MkLabel(F, {
+                    Size = UDim2.new(1, -118, 1, 0), Position = UDim2.new(0, 14, 0, 0),
+                    Text = Data.Name or "キーバインド", TextSize = 17, Font = Enum.Font.SourceSans,
                 })
-                local KB=Instance.new("TextButton")
-                KB.Size=UDim2.new(0,102,0,28); KB.Position=UDim2.new(1,-110,0.5,-14)
-                KB.BackgroundColor3=Color3.fromRGB(26,26,36); KB.BorderSizePixel=0
-                KB.Font=Enum.Font.GothamSemibold; KB.TextSize=15
-                KB.TextColor3=Color3.fromRGB(155,200,255); KB.AutoButtonColor=false; KB.Parent=F
-                CC(KB,6); CS(KB,Color3.fromRGB(48,78,130),1)
+                local KB = Instance.new("TextButton")
+                KB.Size = UDim2.new(0, 102, 0, 28); KB.Position = UDim2.new(1, -110, 0.5, -14)
+                KB.BackgroundColor3 = Color3.fromRGB(26, 26, 36); KB.BorderSizePixel = 0
+                KB.Font = Enum.Font.GothamSemibold; KB.TextSize = 15
+                KB.TextColor3 = Color3.fromRGB(155, 200, 255); KB.AutoButtonColor = false; KB.Parent = F
+                CC(KB, 6); CS(KB, Color3.fromRGB(48, 78, 130), 1)
                 local function KeyName(kc)
-                    local s=tostring(kc); return s:match("Enum%.KeyCode%.(.+)") or s
+                    local s = tostring(kc); return s:match("Enum%.KeyCode%.(.+)") or s
                 end
-                local isMain=(Data.IsToggleKey==true)
-                local curKey=Data.CurrentKey or MyEngine.ToggleKey
-                KB.Text="[ "..KeyName(curKey).." ]"
-                local listening=false; local listenConn=nil; local blinking=false
+                local isMain = (Data.IsToggleKey == true)
+                local curKey = Data.CurrentKey or MyEngine.ToggleKey
+                KB.Text = "[ " .. KeyName(curKey) .. " ]"
+                local listening = false; local listenConn = nil; local blinking = false
                 KB.MouseButton1Click:Connect(function()
                     if listening then return end
-                    listening=true; blinking=true
-                    TW(KB,{BackgroundColor3=Color3.fromRGB(16,16,26)},0.1)
-                    TW(KB,{TextColor3=Color3.fromRGB(255,220,55)},0.1)
-                    KB.Text="[ ??? ]"
+                    listening = true; blinking = true
+                    TW(KB, {BackgroundColor3 = Color3.fromRGB(16, 16, 26)}, 0.1)
+                    TW(KB, {TextColor3 = Color3.fromRGB(255, 220, 55)}, 0.1)
+                    KB.Text = "[ ??? ]"
                     task.spawn(function()
                         while blinking and KB.Parent do
-                            KB.BackgroundTransparency=0; task.wait(0.32)
-                            if blinking then KB.BackgroundTransparency=0.45; task.wait(0.32) end
+                            KB.BackgroundTransparency = 0; task.wait(0.32)
+                            if blinking then KB.BackgroundTransparency = 0.45; task.wait(0.32) end
                         end
-                        KB.BackgroundTransparency=0
+                        KB.BackgroundTransparency = 0
                     end)
-                    listenConn=UserInputService.InputBegan:Connect(function(inp)
+                    listenConn = UserInputService.InputBegan:Connect(function(inp)
                         if not listening then return end
-                        if inp.UserInputType~=Enum.UserInputType.Keyboard then return end
-                        local kc=inp.KeyCode; listening=false; blinking=false
-                        if kc==Enum.KeyCode.Escape then KB.Text="[ "..KeyName(curKey).." ]"
+                        if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
+                        local kc = inp.KeyCode; listening = false; blinking = false
+                        if kc == Enum.KeyCode.Escape then
+                            KB.Text = "[ " .. KeyName(curKey) .. " ]"
                         else
-                            curKey=kc; KB.Text="[ "..KeyName(curKey).." ]"
-                            if isMain then MyEngine.ToggleKey=curKey
-                                AddLog("トグルキー変更 → "..KeyName(curKey),"Action")
+                            curKey = kc; KB.Text = "[ " .. KeyName(curKey) .. " ]"
+                            if isMain then
+                                MyEngine.ToggleKey = curKey
+                                AddLog("トグルキー変更 → " .. KeyName(curKey), "Action")
                             end
-                            if Data.Callback then pcall(Data.Callback,curKey) end
-                            MyEngine.Flags[Data.Flag or Data.Name or ""]=curKey
+                            if Data.Callback then pcall(Data.Callback, curKey) end
+                            MyEngine.Flags[Data.Flag or Data.Name or ""] = curKey
                         end
-                        TW(KB,{BackgroundColor3=Color3.fromRGB(26,26,36),TextColor3=Color3.fromRGB(155,200,255)},0.15)
-                        if listenConn then listenConn:Disconnect(); listenConn=nil end
+                        TW(KB, {BackgroundColor3 = Color3.fromRGB(26, 26, 36), TextColor3 = Color3.fromRGB(155, 200, 255)}, 0.15)
+                        if listenConn then listenConn:Disconnect(); listenConn = nil end
                     end)
                 end)
                 KB.MouseEnter:Connect(function()
-                    if not listening then TW(KB,{BackgroundColor3=Color3.fromRGB(34,34,48)},0.1) end
+                    if not listening then TW(KB, {BackgroundColor3 = Color3.fromRGB(34, 34, 48)}, 0.1) end
                 end)
                 KB.MouseLeave:Connect(function()
-                    if not listening then TW(KB,{BackgroundColor3=Color3.fromRGB(26,26,36)},0.1) end
+                    if not listening then TW(KB, {BackgroundColor3 = Color3.fromRGB(26, 26, 36)}, 0.1) end
                 end)
+                local Elem = {}
+                function Elem:Set(kc)
+                    curKey = kc
+                    KB.Text = "[ " .. KeyName(kc) .. " ]"
+                    if isMain then MyEngine.ToggleKey = kc end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = kc
+                end
+                function Elem:Get() return curKey end
+                return Elem
             end
 
             -- ── テキスト入力 ──────────────────────────────────────
             function Creators:CreateTextInput(Data)
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,70); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-                MkLabel(F,{
-                    Size=UDim2.new(1,-20,0,22),Position=UDim2.new(0,14,0,6),
-                    Text=Data.Name or "テキスト入力",TextSize=14,Font=Enum.Font.GothamSemibold,
-                    TextColor3=Color3.fromRGB(95,115,155),
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 70); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                MkLabel(F, {
+                    Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 14, 0, 6),
+                    Text = Data.Name or "テキスト入力", TextSize = 14, Font = Enum.Font.GothamSemibold,
+                    TextColor3 = Color3.fromRGB(95, 115, 155),
                 })
-                local TB=Instance.new("TextBox")
-                TB.Size=UDim2.new(1,-18,0,32); TB.Position=UDim2.new(0,9,1,-39)
-                TB.BackgroundColor3=Color3.fromRGB(13,13,18); TB.BorderSizePixel=0
-                TB.PlaceholderText=Data.PlaceholderText or "入力..."
-                TB.PlaceholderColor3=Color3.fromRGB(70,75,95)
-                TB.Text=Data.DefaultValue or ""
-                TB.TextColor3=Color3.fromRGB(220,225,240); TB.TextSize=16
-                TB.Font=Enum.Font.SourceSans; TB.ClearTextOnFocus=false; TB.Parent=F; CC(TB,6)
-                CS(TB,Color3.fromRGB(34,34,52),1)
-                TB.Focused:Connect(function() TW(TB,{BackgroundColor3=Color3.fromRGB(16,16,26)},0.1) end)
+                local TB = Instance.new("TextBox")
+                TB.Size = UDim2.new(1, -18, 0, 32); TB.Position = UDim2.new(0, 9, 1, -39)
+                TB.BackgroundColor3 = Color3.fromRGB(13, 13, 18); TB.BorderSizePixel = 0
+                TB.PlaceholderText = Data.PlaceholderText or "入力..."
+                TB.PlaceholderColor3 = Color3.fromRGB(70, 75, 95)
+                TB.Text = Data.DefaultValue or ""
+                TB.TextColor3 = Color3.fromRGB(220, 225, 240); TB.TextSize = 16
+                TB.Font = Enum.Font.SourceSans; TB.ClearTextOnFocus = false; TB.Parent = F; CC(TB, 6)
+                CS(TB, Color3.fromRGB(34, 34, 52), 1)
+                TB.Focused:Connect(function() TW(TB, {BackgroundColor3 = Color3.fromRGB(16, 16, 26)}, 0.1) end)
                 TB.FocusLost:Connect(function(enter)
-                    TW(TB,{BackgroundColor3=Color3.fromRGB(13,13,18)},0.1)
-                    if Data.Callback then pcall(Data.Callback,TB.Text,enter) end
-                    MyEngine.Flags[Data.Flag or Data.Name or ""]=TB.Text
-                    if enter then AddLog("入力確定: "..(Data.Name or "?").." = "..TB.Text,"Action") end
+                    TW(TB, {BackgroundColor3 = Color3.fromRGB(13, 13, 18)}, 0.1)
+                    if Data.Callback then pcall(Data.Callback, TB.Text, enter) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = TB.Text
+                    if enter then AddLog("入力確定: " .. (Data.Name or "?") .. " = " .. TB.Text, "Action") end
                 end)
-                local Elem={}
-                function Elem:Set(text) TB.Text=text or ""
-                    MyEngine.Flags[Data.Flag or Data.Name or ""]=TB.Text
+                local Elem = {}
+                function Elem:Set(text)
+                    TB.Text = text or ""
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = TB.Text
                 end
                 function Elem:Get() return TB.Text end
                 return Elem
             end
 
+            -- Rayfieldとの互換エイリアス
+            Creators.CreateInput = Creators.CreateTextInput
+
             -- ── カラーピッカー ────────────────────────────────────
+            -- [FIX] S/Vスライダーグラデーションが H変更時に更新されないバグを修正
             function Creators:CreateColorPicker(Data)
-                local initCol=Data.Color or Color3.fromRGB(255,85,85)
-                local H,S,V=initCol:ToHSV()
-                local opened=false
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,44); F.BackgroundColor3=Color3.fromRGB(20,20,24)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,7); CS(F,Color3.fromRGB(34,34,42),1)
-                MkLabel(F,{
-                    Size=UDim2.new(1,-80,1,0),Position=UDim2.new(0,14,0,0),
-                    Text=Data.Name or "カラー",TextSize=17,Font=Enum.Font.SourceSans,
+                local initCol = Data.Color or Color3.fromRGB(255, 85, 85)
+                local H, S, V = initCol:ToHSV()
+                local opened = false
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                MkLabel(F, {
+                    Size = UDim2.new(1, -80, 1, 0), Position = UDim2.new(0, 14, 0, 0),
+                    Text = Data.Name or "カラー", TextSize = 17, Font = Enum.Font.SourceSans,
                 })
-                local Preview=Instance.new("Frame")
-                Preview.Size=UDim2.new(0,28,0,28); Preview.Position=UDim2.new(1,-68,0.5,-14)
-                Preview.BackgroundColor3=initCol; Preview.BorderSizePixel=0; Preview.Parent=F; CC(Preview,6)
-                CS(Preview,Color3.fromRGB(55,55,70),1)
-                local HexLbl=MkLabel(F,{
-                    Size=UDim2.new(0,50,0,20),Position=UDim2.new(1,-118,0.5,-10),
-                    Text="",TextSize=11,Font=Enum.Font.Code,
-                    TextColor3=Color3.fromRGB(95,115,155),TextXAlignment=Enum.TextXAlignment.Right,
+                local Preview = Instance.new("Frame")
+                Preview.Size = UDim2.new(0, 28, 0, 28); Preview.Position = UDim2.new(1, -68, 0.5, -14)
+                Preview.BackgroundColor3 = initCol; Preview.BorderSizePixel = 0; Preview.Parent = F; CC(Preview, 6)
+                CS(Preview, Color3.fromRGB(55, 55, 70), 1)
+                local HexLbl = MkLabel(F, {
+                    Size = UDim2.new(0, 50, 0, 20), Position = UDim2.new(1, -118, 0.5, -10),
+                    Text = "", TextSize = 11, Font = Enum.Font.Code,
+                    TextColor3 = Color3.fromRGB(95, 115, 155), TextXAlignment = Enum.TextXAlignment.Right,
                 })
-                local TogBtn=Instance.new("TextButton")
-                TogBtn.Size=UDim2.new(0,22,0,22); TogBtn.Position=UDim2.new(1,-36,0.5,-11)
-                TogBtn.BackgroundColor3=Color3.fromRGB(28,28,38); TogBtn.BorderSizePixel=0
-                TogBtn.Text="▾"; TogBtn.TextColor3=Color3.fromRGB(155,160,185)
-                TogBtn.TextSize=14; TogBtn.Font=Enum.Font.GothamBold
-                TogBtn.AutoButtonColor=false; TogBtn.Parent=F; CC(TogBtn,6)
-                local CPanel=Instance.new("Frame")
-                CPanel.Size=UDim2.new(1,0,0,0); CPanel.Position=UDim2.new(0,0,1,4)
-                CPanel.BackgroundColor3=Color3.fromRGB(15,15,19); CPanel.BorderSizePixel=0
-                CPanel.Visible=false; CPanel.ZIndex=5; CPanel.Parent=F; CC(CPanel,7)
-                CS(CPanel,Color3.fromRGB(34,34,48),1)
-                local BigPrev=Instance.new("Frame")
-                BigPrev.Size=UDim2.new(1,-20,0,46); BigPrev.Position=UDim2.new(0,10,0,10)
-                BigPrev.BackgroundColor3=initCol; BigPrev.BorderSizePixel=0; BigPrev.ZIndex=6; BigPrev.Parent=CPanel
-                CC(BigPrev,8); CS(BigPrev,Color3.fromRGB(50,50,70),1.5)
-                local function MkHsvSlider(label,yPos,initVal,col1,col2)
-                    MkLabel(CPanel,{
-                        Size=UDim2.new(0,14,0,16),Position=UDim2.new(0,10,0,yPos),
-                        Text=label,TextSize=12,Font=Enum.Font.GothamSemibold,
-                        TextColor3=Color3.fromRGB(95,115,155),ZIndex=6,
+                local TogBtn = Instance.new("TextButton")
+                TogBtn.Size = UDim2.new(0, 22, 0, 22); TogBtn.Position = UDim2.new(1, -36, 0.5, -11)
+                TogBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 38); TogBtn.BorderSizePixel = 0
+                TogBtn.Text = "▾"; TogBtn.TextColor3 = Color3.fromRGB(155, 160, 185)
+                TogBtn.TextSize = 14; TogBtn.Font = Enum.Font.GothamBold
+                TogBtn.AutoButtonColor = false; TogBtn.Parent = F; CC(TogBtn, 6)
+                local CPanel = Instance.new("Frame")
+                CPanel.Size = UDim2.new(1, 0, 0, 0); CPanel.Position = UDim2.new(0, 0, 1, 4)
+                CPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 19); CPanel.BorderSizePixel = 0
+                CPanel.Visible = false; CPanel.ZIndex = 5; CPanel.Parent = F; CC(CPanel, 7)
+                CS(CPanel, Color3.fromRGB(34, 34, 48), 1)
+                local BigPrev = Instance.new("Frame")
+                BigPrev.Size = UDim2.new(1, -20, 0, 46); BigPrev.Position = UDim2.new(0, 10, 0, 10)
+                BigPrev.BackgroundColor3 = initCol; BigPrev.BorderSizePixel = 0; BigPrev.ZIndex = 6; BigPrev.Parent = CPanel
+                CC(BigPrev, 8); CS(BigPrev, Color3.fromRGB(50, 50, 70), 1.5)
+
+                -- スライダー生成関数
+                local function MkHsvSlider(label, yPos, initVal, col1, col2)
+                    MkLabel(CPanel, {
+                        Size = UDim2.new(0, 14, 0, 16), Position = UDim2.new(0, 10, 0, yPos),
+                        Text = label, TextSize = 12, Font = Enum.Font.GothamSemibold,
+                        TextColor3 = Color3.fromRGB(95, 115, 155), ZIndex = 6,
                     })
-                    local ValLbl=MkLabel(CPanel,{
-                        Size=UDim2.new(0,28,0,16),Position=UDim2.new(1,-34,0,yPos),
-                        Text="",TextSize=11,Font=Enum.Font.Code,
-                        TextColor3=Color3.fromRGB(95,115,155),ZIndex=6,
-                        TextXAlignment=Enum.TextXAlignment.Right,
+                    local ValLbl = MkLabel(CPanel, {
+                        Size = UDim2.new(0, 28, 0, 16), Position = UDim2.new(1, -34, 0, yPos),
+                        Text = "", TextSize = 11, Font = Enum.Font.Code,
+                        TextColor3 = Color3.fromRGB(95, 115, 155), ZIndex = 6,
+                        TextXAlignment = Enum.TextXAlignment.Right,
                     })
-                    local TrkBG2=Instance.new("Frame")
-                    TrkBG2.Size=UDim2.new(1,-54,0,8); TrkBG2.Position=UDim2.new(0,26,0,yPos+4)
-                    TrkBG2.BorderSizePixel=0; TrkBG2.ZIndex=6; TrkBG2.Parent=CPanel; CC(TrkBG2,100)
-                    local Grad2=Instance.new("UIGradient")
-                    Grad2.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,col1),ColorSequenceKeypoint.new(1,col2)}
-                    Grad2.Parent=TrkBG2
-                    local Knob=Instance.new("Frame")
-                    Knob.Size=UDim2.new(0,14,0,14); Knob.AnchorPoint=Vector2.new(0.5,0.5)
-                    Knob.Position=UDim2.new(initVal,0,0.5,0); Knob.BackgroundColor3=Color3.fromRGB(255,255,255)
-                    Knob.BorderSizePixel=0; Knob.ZIndex=8; Knob.Parent=TrkBG2; CC(Knob,100)
-                    CS(Knob,Color3.fromRGB(120,120,140),1)
-                    local dr2=false
+                    local TrkBG2 = Instance.new("Frame")
+                    TrkBG2.Size = UDim2.new(1, -54, 0, 8); TrkBG2.Position = UDim2.new(0, 26, 0, yPos + 4)
+                    TrkBG2.BorderSizePixel = 0; TrkBG2.ZIndex = 6; TrkBG2.Parent = CPanel; CC(TrkBG2, 100)
+                    local Grad2 = Instance.new("UIGradient")
+                    Grad2.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, col1),
+                        ColorSequenceKeypoint.new(1, col2)
+                    }
+                    Grad2.Parent = TrkBG2
+                    local Knob = Instance.new("Frame")
+                    Knob.Size = UDim2.new(0, 14, 0, 14); Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+                    Knob.Position = UDim2.new(initVal, 0, 0.5, 0); Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                    Knob.BorderSizePixel = 0; Knob.ZIndex = 8; Knob.Parent = TrkBG2; CC(Knob, 100)
+                    CS(Knob, Color3.fromRGB(120, 120, 140), 1)
+                    local dr2 = false
                     TrkBG2.InputBegan:Connect(function(i)
-                        if i.UserInputType==Enum.UserInputType.MouseButton1 then dr2=true end
+                        if i.UserInputType == Enum.UserInputType.MouseButton1 then dr2 = true end
                     end)
                     UserInputService.InputEnded:Connect(function(i)
-                        if i.UserInputType==Enum.UserInputType.MouseButton1 then dr2=false end
+                        if i.UserInputType == Enum.UserInputType.MouseButton1 then dr2 = false end
                     end)
-                    local curVal=initVal
+                    local curVal = initVal
                     RunService.RenderStepped:Connect(function()
                         if dr2 and CPanel.Visible then
-                            local mx=UserInputService:GetMouseLocation().X
-                            curVal=math.clamp((mx-TrkBG2.AbsolutePosition.X)/TrkBG2.AbsoluteSize.X,0,1)
-                            Knob.Position=UDim2.new(curVal,0,0.5,0)
-                            ValLbl.Text=tostring(math.floor(curVal*100)).."%"
+                            local mx = UserInputService:GetMouseLocation().X
+                            curVal = math.clamp((mx - TrkBG2.AbsolutePosition.X) / TrkBG2.AbsoluteSize.X, 0, 1)
+                            Knob.Position = UDim2.new(curVal, 0, 0.5, 0)
+                            ValLbl.Text = tostring(math.floor(curVal * 100)) .. "%"
                         end
                     end)
-                    ValLbl.Text=tostring(math.floor(initVal*100)).."%"
-                    return function() return curVal end, ValLbl, Knob
+                    ValLbl.Text = tostring(math.floor(initVal * 100)) .. "%"
+                    return function() return curVal end, ValLbl, Knob, TrkBG2, Grad2
                 end
-                local GetH,HValLbl,HKnob=MkHsvSlider("H",66,H,Color3.fromRGB(255,0,0),Color3.fromRGB(255,0,0))
-                local GetS,SValLbl,SKnob=MkHsvSlider("S",92,S,Color3.fromRGB(180,180,180),Color3.fromRGB(255,85,85))
-                local GetV,VValLbl,VKnob=MkHsvSlider("V",118,V,Color3.fromRGB(0,0,0),Color3.fromRGB(255,255,255))
-                local HTrkBG=HKnob.Parent
-                local oldGrad=HTrkBG:FindFirstChildOfClass("UIGradient")
-                if oldGrad then oldGrad:Destroy() end
-                local RainbowGrad=Instance.new("UIGradient")
-                RainbowGrad.Color=ColorSequence.new{
-                    ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
-                    ColorSequenceKeypoint.new(0.17,Color3.fromRGB(255,255,0)),
-                    ColorSequenceKeypoint.new(0.33,Color3.fromRGB(0,255,0)),
-                    ColorSequenceKeypoint.new(0.50,Color3.fromRGB(0,255,255)),
-                    ColorSequenceKeypoint.new(0.67,Color3.fromRGB(0,0,255)),
-                    ColorSequenceKeypoint.new(0.83,Color3.fromRGB(255,0,255)),
-                    ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0)),
+
+                local GetH, HValLbl, HKnob, HTrkBG, HGrad = MkHsvSlider("H", 66, H,
+                    Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 0, 0))
+                local GetS, SValLbl, SKnob, STrkBG, SGrad = MkHsvSlider("S", 92, S,
+                    Color3.fromRGB(180, 180, 180), Color3.fromRGB(255, 85, 85))
+                local GetV, VValLbl, VKnob, VTrkBG, VGrad = MkHsvSlider("V", 118, V,
+                    Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 255, 255))
+
+                -- [FIX] H スライダーをレインボーグラデーションに
+                HGrad.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 0, 0)),
+                    ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+                    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+                    ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0, 255, 255)),
+                    ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+                    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+                    ColorSequenceKeypoint.new(1,    Color3.fromRGB(255, 0, 0)),
                 }
-                RainbowGrad.Parent=HTrkBG
+
                 local function ToHex(c)
-                    return string.format("#%02X%02X%02X",math.floor(c.R*255),math.floor(c.G*255),math.floor(c.B*255))
+                    return string.format("#%02X%02X%02X",
+                        math.floor(c.R * 255), math.floor(c.G * 255), math.floor(c.B * 255))
                 end
-                local curColor=initCol
+                local curColor = initCol
+                HexLbl.Text = ToHex(initCol)
+
                 task.spawn(function()
                     while F.Parent do
                         if CPanel.Visible then
-                            local newH=GetH(); local newS=GetS(); local newV=GetV()
-                            local nc=Color3.fromHSV(newH,newS,newV)
-                            if nc~=curColor then
-                                curColor=nc; Preview.BackgroundColor3=curColor
-                                BigPrev.BackgroundColor3=curColor; HexLbl.Text=ToHex(curColor)
-                                local STrk=SKnob.Parent
-                                local sg2=STrk:FindFirstChildOfClass("UIGradient")
-                                if sg2 then
-                                    sg2.Color=ColorSequence.new{
-                                        ColorSequenceKeypoint.new(0,Color3.fromHSV(newH,0,newV)),
-                                        ColorSequenceKeypoint.new(1,Color3.fromHSV(newH,1,newV)),
-                                    }
-                                end
-                                if Data.Callback then pcall(Data.Callback,curColor) end
-                                MyEngine.Flags[Data.Flag or Data.Name or ""]=curColor
+                            local newH = GetH(); local newS = GetS(); local newV = GetV()
+                            local nc = Color3.fromHSV(newH, newS, newV)
+                            if nc ~= curColor then
+                                curColor = nc
+                                Preview.BackgroundColor3 = curColor
+                                BigPrev.BackgroundColor3 = curColor
+                                HexLbl.Text = ToHex(curColor)
+
+                                -- [FIX] S スライダーのグラデーションを H/V に応じて更新
+                                SGrad.Color = ColorSequence.new{
+                                    ColorSequenceKeypoint.new(0, Color3.fromHSV(newH, 0, newV)),
+                                    ColorSequenceKeypoint.new(1, Color3.fromHSV(newH, 1, newV)),
+                                }
+                                -- [FIX] V スライダーのグラデーションを H/S に応じて更新
+                                VGrad.Color = ColorSequence.new{
+                                    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)),
+                                    ColorSequenceKeypoint.new(1, Color3.fromHSV(newH, newS, 1)),
+                                }
+
+                                if Data.Callback then pcall(Data.Callback, curColor) end
+                                MyEngine.Flags[Data.Flag or Data.Name or ""] = curColor
                             end
                         end
                         task.wait(0.05)
                     end
                 end)
-                HexLbl.Text=ToHex(initCol)
-                local PANEL_H=148
+
+                local PANEL_H = 148
                 TogBtn.MouseButton1Click:Connect(function()
-                    opened=not opened; CPanel.Visible=opened; TogBtn.Text=opened and "▴" or "▾"
-                    TW(F,{Size=UDim2.new(1,0,0,opened and 44+PANEL_H+6 or 44)},0.2)
-                    if opened then CPanel.Size=UDim2.new(1,0,0,PANEL_H) end
+                    opened = not opened; CPanel.Visible = opened; TogBtn.Text = opened and "▴" or "▾"
+                    TW(F, {Size = UDim2.new(1, 0, 0, opened and 44 + PANEL_H + 6 or 44)}, 0.2)
+                    if opened then CPanel.Size = UDim2.new(1, 0, 0, PANEL_H) end
                 end)
-                local Elem={}
+
+                local Elem = {}
                 function Elem:Set(color3)
-                    curColor=color3; H,S,V=color3:ToHSV()
-                    HKnob.Position=UDim2.new(H,0,0.5,0); SKnob.Position=UDim2.new(S,0,0.5,0)
-                    VKnob.Position=UDim2.new(V,0,0.5,0)
-                    HValLbl.Text=tostring(math.floor(H*100)).."%"
-                    SValLbl.Text=tostring(math.floor(S*100)).."%"
-                    VValLbl.Text=tostring(math.floor(V*100)).."%"
-                    Preview.BackgroundColor3=curColor; BigPrev.BackgroundColor3=curColor
-                    HexLbl.Text=ToHex(curColor)
-                    if Data.Callback then pcall(Data.Callback,curColor) end
-                    MyEngine.Flags[Data.Flag or Data.Name or ""]=curColor
+                    curColor = color3; H, S, V = color3:ToHSV()
+                    HKnob.Position = UDim2.new(H, 0, 0.5, 0)
+                    SKnob.Position = UDim2.new(S, 0, 0.5, 0)
+                    VKnob.Position = UDim2.new(V, 0, 0.5, 0)
+                    HValLbl.Text = tostring(math.floor(H * 100)) .. "%"
+                    SValLbl.Text = tostring(math.floor(S * 100)) .. "%"
+                    VValLbl.Text = tostring(math.floor(V * 100)) .. "%"
+                    Preview.BackgroundColor3 = curColor; BigPrev.BackgroundColor3 = curColor
+                    HexLbl.Text = ToHex(curColor)
+                    if Data.Callback then pcall(Data.Callback, curColor) end
+                    MyEngine.Flags[Data.Flag or Data.Name or ""] = curColor
                 end
                 function Elem:Get() return curColor end
                 return Elem
             end
 
             -- ================================================================
-            --  【V3.3 NEW】折りたたみセクション
-            --  使い方: local Sec = Tab:CreateCollapsibleSection("セクション名")
-            --          Sec:CreateToggle({...})  ← Tab と全く同じ API
+            --  【V3.3 継承】折りたたみセクション
             -- ================================================================
             function Creators:CreateCollapsibleSection(sectionName)
                 local HEADER_H = 40
 
-                -- 外枠フレーム（折りたたみで高さが変わる）
                 local Outer = Instance.new("Frame")
                 Outer.Size = UDim2.new(1, 0, 0, HEADER_H)
                 Outer.BackgroundColor3 = Color3.fromRGB(13, 13, 17)
                 Outer.BorderSizePixel = 0
                 Outer.ClipsDescendants = true
                 Outer.Parent = container
-                CC(Outer, 8)
-                local outerStroke = CS(Outer, Color3.fromRGB(38, 50, 75), 1.5)
+                CC(Outer, 8); CS(Outer, Color3.fromRGB(38, 50, 75), 1.5)
 
-                -- ヘッダーグラデーション
                 local HdrGrad = Instance.new("UIGradient")
                 HdrGrad.Color = ColorSequence.new{
                     ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 22, 32)),
                     ColorSequenceKeypoint.new(1, Color3.fromRGB(13, 13, 17)),
                 }
-                HdrGrad.Rotation = 90
-                HdrGrad.Parent = Outer
+                HdrGrad.Rotation = 90; HdrGrad.Parent = Outer
 
-                -- 左アクセントライン
                 local AccLine = Instance.new("Frame")
                 AccLine.Size = UDim2.new(0, 3, 0, 24)
                 AccLine.Position = UDim2.new(0, 0, 0, (HEADER_H - 24) / 2)
                 AccLine.BackgroundColor3 = Color3.fromRGB(50, 130, 255)
-                AccLine.BorderSizePixel = 0
-                AccLine.Parent = Outer
-                CC(AccLine, 2)
+                AccLine.BorderSizePixel = 0; AccLine.Parent = Outer; CC(AccLine, 2)
 
-                -- ヘッダーボタン（クリックで開閉）
                 local HeaderBtn = Instance.new("TextButton")
                 HeaderBtn.Size = UDim2.new(1, 0, 0, HEADER_H)
                 HeaderBtn.BackgroundTransparency = 1
                 HeaderBtn.Text = "  " .. (sectionName or "セクション")
                 HeaderBtn.TextColor3 = Color3.fromRGB(110, 160, 235)
-                HeaderBtn.TextSize = 15
-                HeaderBtn.Font = Enum.Font.GothamSemibold
+                HeaderBtn.TextSize = 15; HeaderBtn.Font = Enum.Font.GothamSemibold
                 HeaderBtn.TextXAlignment = Enum.TextXAlignment.Left
-                HeaderBtn.AutoButtonColor = false
-                HeaderBtn.ZIndex = 5
-                HeaderBtn.Parent = Outer
+                HeaderBtn.AutoButtonColor = false; HeaderBtn.ZIndex = 5; HeaderBtn.Parent = Outer
 
-                -- 矢印アイコン
                 local Arrow = MkLabel(Outer, {
-                    Size = UDim2.new(0, 28, 0, HEADER_H),
-                    Position = UDim2.new(1, -32, 0, 0),
-                    Text = "▶",
-                    TextColor3 = Color3.fromRGB(70, 110, 180),
-                    TextSize = 13,
-                    Font = Enum.Font.GothamBold,
-                    TextXAlignment = Enum.TextXAlignment.Center,
-                    ZIndex = 6,
+                    Size = UDim2.new(0, 28, 0, HEADER_H), Position = UDim2.new(1, -32, 0, 0),
+                    Text = "▶", TextColor3 = Color3.fromRGB(70, 110, 180), TextSize = 13,
+                    Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6,
                 })
 
-                -- 区切りライン
                 local Sep = Instance.new("Frame")
-                Sep.Size = UDim2.new(1, -12, 0, 1)
-                Sep.Position = UDim2.new(0, 6, 0, HEADER_H - 1)
-                Sep.BackgroundColor3 = Color3.fromRGB(32, 42, 65)
-                Sep.BorderSizePixel = 0
-                Sep.Parent = Outer
+                Sep.Size = UDim2.new(1, -12, 0, 1); Sep.Position = UDim2.new(0, 6, 0, HEADER_H - 1)
+                Sep.BackgroundColor3 = Color3.fromRGB(32, 42, 65); Sep.BorderSizePixel = 0; Sep.Parent = Outer
 
-                -- コンテンツエリア
                 local Inner = Instance.new("Frame")
-                Inner.Name = "_SecInner"
-                Inner.Size = UDim2.new(1, 0, 0, 0)
+                Inner.Name = "_SecInner"; Inner.Size = UDim2.new(1, 0, 0, 0)
                 Inner.Position = UDim2.new(0, 0, 0, HEADER_H + 1)
-                Inner.BackgroundTransparency = 1
-                Inner.BorderSizePixel = 0
-                Inner.Parent = Outer
+                Inner.BackgroundTransparency = 1; Inner.BorderSizePixel = 0; Inner.Parent = Outer
 
                 local IL = Instance.new("UIListLayout")
-                IL.Padding = UDim.new(0, 6)
-                IL.SortOrder = Enum.SortOrder.LayoutOrder
-                IL.Parent = Inner
+                IL.Padding = UDim.new(0, 6); IL.SortOrder = Enum.SortOrder.LayoutOrder; IL.Parent = Inner
 
                 local IP = Instance.new("UIPadding")
-                IP.PaddingTop = UDim.new(0, 6)
-                IP.PaddingBottom = UDim.new(0, 10)
-                IP.PaddingLeft = UDim.new(0, 4)
-                IP.PaddingRight = UDim.new(0, 4)
-                IP.Parent = Inner
+                IP.PaddingTop = UDim.new(0, 6); IP.PaddingBottom = UDim.new(0, 10)
+                IP.PaddingLeft = UDim.new(0, 4); IP.PaddingRight = UDim.new(0, 4); IP.Parent = Inner
 
-                local expanded = false  -- デフォルト折りたたみ
+                local expanded = false
 
                 local function getContentH()
                     return IL.AbsoluteContentSize.Y + 16
                 end
-
                 local function getFullH()
                     return HEADER_H + 1 + getContentH()
                 end
 
-                -- コンテンツ変化時に高さを更新
                 IL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     Inner.Size = UDim2.new(1, 0, 0, getContentH())
                     if expanded then
@@ -1279,27 +1718,23 @@ function MyEngine:CreateWindow(Config)
                     TW(HeaderBtn, {TextColor3 = Color3.fromRGB(110, 160, 235)}, 0.1)
                     TW(AccLine, {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.1)
                 end)
-
                 HeaderBtn.MouseButton1Click:Connect(function()
                     expanded = not expanded
                     if expanded then
-                        -- 展開
                         Arrow.Text = "▼"
                         TW(AccLine, {BackgroundColor3 = Color3.fromRGB(95, 195, 255)}, 0.15)
                         TW(Outer, {Size = UDim2.new(1, 0, 0, getFullH())},
                             0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-                        TW(outerStroke, {Color = Color3.fromRGB(55, 130, 225)}, 0.15)
+                        CS(Outer, Color3.fromRGB(55, 130, 225), 1.5)
                     else
-                        -- 折りたたみ
                         Arrow.Text = "▶"
                         TW(AccLine, {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.15)
                         TW(Outer, {Size = UDim2.new(1, 0, 0, HEADER_H)},
                             0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-                        TW(outerStroke, {Color = Color3.fromRGB(38, 50, 75)}, 0.15)
+                        CS(Outer, Color3.fromRGB(38, 50, 75), 1.5)
                     end
                 end)
 
-                -- Inner を container として再帰的にビルダーを返す
                 return buildCreators(Inner)
             end
 
@@ -1310,382 +1745,340 @@ function MyEngine:CreateWindow(Config)
                 local FULL_H   = 360
                 local HEADER_H = 48
 
-                local LOG_COLORS={
-                    Info=Color3.fromRGB(160,170,190), Action=Color3.fromRGB(70,150,255),
-                    Success=Color3.fromRGB(65,210,100), Warning=Color3.fromRGB(240,175,45),
-                    Error=Color3.fromRGB(215,70,70),
+                local LOG_COLORS = {
+                    Info    = Color3.fromRGB(160, 170, 190),
+                    Action  = Color3.fromRGB(70, 150, 255),
+                    Success = Color3.fromRGB(65, 210, 100),
+                    Warning = Color3.fromRGB(240, 175, 45),
+                    Error   = Color3.fromRGB(215, 70, 70),
                 }
-                local LOG_BADGES={Info="INFO",Action="ACT",Success="OK",Warning="WARN",Error="ERR"}
+                local LOG_BADGES = {Info = "INFO", Action = "ACT", Success = "OK", Warning = "WARN", Error = "ERR"}
 
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 8); CS(F, Color3.fromRGB(34, 34, 42), 1)
 
-                MkLabel(F,{
-                    Size=UDim2.new(1,-130,0,32),Position=UDim2.new(0,14,0,8),
-                    Text="ログ",TextSize=18,Font=Enum.Font.SourceSansBold,
-                    TextColor3=Color3.fromRGB(255,255,255),
+                MkLabel(F, {
+                    Size = UDim2.new(1, -130, 0, 32), Position = UDim2.new(0, 14, 0, 8),
+                    Text = "ログ", TextSize = 18, Font = Enum.Font.SourceSansBold,
+                    TextColor3 = Color3.fromRGB(255, 255, 255),
                 })
 
-                local ClearBtn=Instance.new("TextButton")
-                ClearBtn.Size=UDim2.new(0,64,0,26); ClearBtn.Position=UDim2.new(1,-114,0,11)
-                ClearBtn.BackgroundColor3=Color3.fromRGB(22,22,30); ClearBtn.BorderSizePixel=0
-                ClearBtn.Text="クリア"; ClearBtn.TextColor3=Color3.fromRGB(180,80,80)
-                ClearBtn.TextSize=14; ClearBtn.Font=Enum.Font.GothamSemibold
-                ClearBtn.AutoButtonColor=false; ClearBtn.ZIndex=10; ClearBtn.Parent=F; CC(ClearBtn,6)
-                CS(ClearBtn,Color3.fromRGB(80,30,30),1)
-                ClearBtn.MouseEnter:Connect(function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(32,18,18)},0.1) end)
-                ClearBtn.MouseLeave:Connect(function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.1) end)
+                local ClearBtn = Instance.new("TextButton")
+                ClearBtn.Size = UDim2.new(0, 64, 0, 26); ClearBtn.Position = UDim2.new(1, -114, 0, 11)
+                ClearBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 30); ClearBtn.BorderSizePixel = 0
+                ClearBtn.Text = "クリア"; ClearBtn.TextColor3 = Color3.fromRGB(180, 80, 80)
+                ClearBtn.TextSize = 14; ClearBtn.Font = Enum.Font.GothamSemibold
+                ClearBtn.AutoButtonColor = false; ClearBtn.ZIndex = 10; ClearBtn.Parent = F; CC(ClearBtn, 6)
+                CS(ClearBtn, Color3.fromRGB(80, 30, 30), 1)
+                ClearBtn.MouseEnter:Connect(function() TW(ClearBtn, {BackgroundColor3 = Color3.fromRGB(32, 18, 18)}, 0.1) end)
+                ClearBtn.MouseLeave:Connect(function() TW(ClearBtn, {BackgroundColor3 = Color3.fromRGB(22, 22, 30)}, 0.1) end)
 
                 MakeCollapsible(F, FULL_H, HEADER_H)
 
-                local Sep=Instance.new("Frame")
-                Sep.Size=UDim2.new(1,-24,0,1); Sep.Position=UDim2.new(0,12,0,42)
-                Sep.BackgroundColor3=Color3.fromRGB(28,28,38); Sep.BorderSizePixel=0; Sep.Parent=F
+                local Sep = Instance.new("Frame")
+                Sep.Size = UDim2.new(1, -24, 0, 1); Sep.Position = UDim2.new(0, 12, 0, 42)
+                Sep.BackgroundColor3 = Color3.fromRGB(28, 28, 38); Sep.BorderSizePixel = 0; Sep.Parent = F
 
-                local SF=Instance.new("ScrollingFrame")
-                SF.Size=UDim2.new(1,-12,0,302); SF.Position=UDim2.new(0,6,0,48)
-                SF.BackgroundTransparency=1; SF.BorderSizePixel=0
-                SF.ScrollBarThickness=3; SF.ScrollBarImageColor3=Color3.fromRGB(55,55,65)
-                SF.ScrollingDirection=Enum.ScrollingDirection.Y; SF.Parent=F
-                local LL=Instance.new("UIListLayout")
-                LL.Padding=UDim.new(0,2); LL.SortOrder=Enum.SortOrder.LayoutOrder; LL.Parent=SF
-                local LP2=Instance.new("UIPadding")
-                LP2.PaddingTop=UDim.new(0,4); LP2.PaddingBottom=UDim.new(0,4)
-                LP2.PaddingLeft=UDim.new(0,4); LP2.PaddingRight=UDim.new(0,4); LP2.Parent=SF
+                local SF = Instance.new("ScrollingFrame")
+                SF.Size = UDim2.new(1, -12, 0, 302); SF.Position = UDim2.new(0, 6, 0, 48)
+                SF.BackgroundTransparency = 1; SF.BorderSizePixel = 0
+                SF.ScrollBarThickness = 3; SF.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+                SF.ScrollingDirection = Enum.ScrollingDirection.Y; SF.Parent = F
+                local LL = Instance.new("UIListLayout")
+                LL.Padding = UDim.new(0, 2); LL.SortOrder = Enum.SortOrder.LayoutOrder; LL.Parent = SF
+                local LP2 = Instance.new("UIPadding")
+                LP2.PaddingTop = UDim.new(0, 4); LP2.PaddingBottom = UDim.new(0, 4)
+                LP2.PaddingLeft = UDim.new(0, 4); LP2.PaddingRight = UDim.new(0, 4); LP2.Parent = SF
 
                 local function Rebuild()
-                    for _,c in pairs(SF:GetChildren()) do
+                    for _, c in pairs(SF:GetChildren()) do
                         if c:IsA("Frame") then c:Destroy() end
                     end
-                    local logs=MyEngine.Logs
-                    for i=#logs,math.max(1,#logs-79),-1 do
-                        local log=logs[i]
-                        local col=LOG_COLORS[log.Type] or LOG_COLORS.Info
-                        local badge=LOG_BADGES[log.Type] or "INFO"
-                        local Row=Instance.new("Frame")
-                        Row.Size=UDim2.new(1,0,0,26); Row.BackgroundTransparency=1; Row.Parent=SF
-                        local BadgeF=Instance.new("Frame")
-                        BadgeF.Size=UDim2.new(0,38,0,18); BadgeF.Position=UDim2.new(0,0,0.5,-9)
-                        BadgeF.BackgroundColor3=col; BadgeF.BackgroundTransparency=0.72
-                        BadgeF.BorderSizePixel=0; BadgeF.Parent=Row; CC(BadgeF,4)
-                        MkLabel(BadgeF,{Size=UDim2.new(1,0,1,0),Text=badge,TextSize=10,
-                            Font=Enum.Font.GothamBold,TextColor3=col,TextXAlignment=Enum.TextXAlignment.Center})
-                        MkLabel(Row,{Size=UDim2.new(0,62,1,0),Position=UDim2.new(0,42,0,0),
-                            Text=log.Time,TextSize=11,Font=Enum.Font.Code,TextColor3=Color3.fromRGB(55,65,90)})
-                        MkLabel(Row,{Size=UDim2.new(1,-108,1,0),Position=UDim2.new(0,108,0,0),
-                            Text=log.Message,TextSize=13,Font=Enum.Font.SourceSans,
-                            TextColor3=col,TextTruncate=Enum.TextTruncate.AtEnd})
+                    local logs = MyEngine.Logs
+                    for i = #logs, math.max(1, #logs - 79), -1 do
+                        local log = logs[i]
+                        local col = LOG_COLORS[log.Type] or LOG_COLORS.Info
+                        local badge = LOG_BADGES[log.Type] or "INFO"
+                        local Row = Instance.new("Frame")
+                        Row.Size = UDim2.new(1, 0, 0, 26); Row.BackgroundTransparency = 1; Row.Parent = SF
+                        local BadgeF = Instance.new("Frame")
+                        BadgeF.Size = UDim2.new(0, 38, 0, 18); BadgeF.Position = UDim2.new(0, 0, 0.5, -9)
+                        BadgeF.BackgroundColor3 = col; BadgeF.BackgroundTransparency = 0.72
+                        BadgeF.BorderSizePixel = 0; BadgeF.Parent = Row; CC(BadgeF, 4)
+                        MkLabel(BadgeF, {Size = UDim2.new(1, 0, 1, 0), Text = badge, TextSize = 10,
+                            Font = Enum.Font.GothamBold, TextColor3 = col, TextXAlignment = Enum.TextXAlignment.Center})
+                        MkLabel(Row, {Size = UDim2.new(0, 62, 1, 0), Position = UDim2.new(0, 42, 0, 0),
+                            Text = log.Time, TextSize = 11, Font = Enum.Font.Code, TextColor3 = Color3.fromRGB(55, 65, 90)})
+                        MkLabel(Row, {Size = UDim2.new(1, -108, 1, 0), Position = UDim2.new(0, 108, 0, 0),
+                            Text = log.Message, TextSize = 13, Font = Enum.Font.SourceSans,
+                            TextColor3 = col, TextTruncate = Enum.TextTruncate.AtEnd})
                     end
-                    SF.CanvasSize=UDim2.new(0,0,0,LL.AbsoluteContentSize.Y+8)
+                    SF.CanvasSize = UDim2.new(0, 0, 0, LL.AbsoluteContentSize.Y + 8)
                 end
                 Rebuild()
 
                 ClearBtn.MouseButton1Click:Connect(function()
-                    MyEngine.Logs={}
-                    TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(40,20,20)},0.06)
-                    task.delay(0.08,function() TW(ClearBtn,{BackgroundColor3=Color3.fromRGB(22,22,30)},0.12) end)
-                    Rebuild(); AddLog("ログをクリアしました","Info")
+                    MyEngine.Logs = {}
+                    TW(ClearBtn, {BackgroundColor3 = Color3.fromRGB(40, 20, 20)}, 0.06)
+                    task.delay(0.08, function() TW(ClearBtn, {BackgroundColor3 = Color3.fromRGB(22, 22, 30)}, 0.12) end)
+                    Rebuild(); AddLog("ログをクリアしました", "Info")
                 end)
 
-                local listenId=tostring(tick())
-                LogListeners[listenId]=Rebuild
+                local listenId = tostring(tick())
+                LogListeners[listenId] = Rebuild
                 F.AncestryChanged:Connect(function()
-                    if not F.Parent then LogListeners[listenId]=nil end
+                    if not F.Parent then LogListeners[listenId] = nil end
                 end)
             end
 
             -- ================================================================
             --  プレイヤーリスト ── テーブル式マルチ選択 ── 折りたたみ対応
-            --
-            --  【V3.3 PATCH】selectedTable を導入し、何人でも同時選択可能に変更。
-            --
-            --  selectedTable の構造:
-            --    selectedTable[player.Name] = true   ← 選択中
-            --    selectedTable[player.Name] = nil    ← 未選択
-            --
-            --  コールバック署名（後方互換 + テーブル追加）:
-            --    Data.Callback(player, isSelected, selectedTable)
-            --      player       : 操作対象の Player オブジェクト
-            --      isSelected   : true=追加 / false=解除
-            --      selectedTable: 現在選択中の全プレイヤーテーブル（読み取り専用として扱うこと）
-            --
-            --  戻り値 Elem の API:
-            --    Elem:GetSelected()          → selectedTable のシャローコピーを返す
-            --    Elem:IsSelected(player)     → bool（そのプレイヤーが選択中か）
-            --    Elem:ClearAll()             → 全選択を解除し UI を更新
-            --    Elem:SelectPlayer(player)   → 指定プレイヤーを選択状態にする
-            --    Elem:DeselectPlayer(player) → 指定プレイヤーを選択解除する
             -- ================================================================
             function Creators:CreatePlayerList(Data)
                 local FULL_H   = 420
                 local HEADER_H = 48
-
-                -- ── テーブル式マルチ選択の核心 ──────────────────────
-                -- キー: player.Name (string)、値: true
-                -- 空テーブル = 誰も選択していない
                 local selectedTable = {}
 
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 8); CS(F, Color3.fromRGB(34, 34, 42), 1)
 
-                MkLabel(F,{
-                    Size=UDim2.new(1,-55,0,30),Position=UDim2.new(0,13,0,9),
-                    Text=Data.Name or "プレイヤーリスト",TextSize=18,Font=Enum.Font.SourceSansBold,
-                    TextColor3=Color3.fromRGB(255,255,255),
+                MkLabel(F, {
+                    Size = UDim2.new(0.55, 0, 0, 30), Position = UDim2.new(0, 14, 0, 9),
+                    Text = Data.Title or "プレイヤーリスト", TextSize = 18, Font = Enum.Font.SourceSansBold,
+                    TextColor3 = Color3.fromRGB(255, 255, 255),
                 })
 
-                -- 選択人数バッジ（右上）
                 local CountLbl = MkLabel(F, {
-                    Size=UDim2.new(0,80,0,20), Position=UDim2.new(1,-122,0,14),
-                    Text="選択: 0人", TextSize=13, Font=Enum.Font.GothamSemibold,
-                    TextColor3=Color3.fromRGB(70,150,255),
-                    TextXAlignment=Enum.TextXAlignment.Right,
+                    Size = UDim2.new(0, 120, 0, 26), Position = UDim2.new(0.55, -10, 0, 11),
+                    Text = "選択: 0", TextSize = 13, Font = Enum.Font.GothamSemibold,
+                    TextColor3 = Color3.fromRGB(70, 150, 255), TextXAlignment = Enum.TextXAlignment.Right,
                 })
-
-                local function UpdateCountLbl()
-                    local n = 0
-                    for _ in pairs(selectedTable) do n = n + 1 end
-                    CountLbl.Text = "選択: " .. n .. "人"
-                    CountLbl.TextColor3 = n > 0
-                        and Color3.fromRGB(70, 195, 100)
-                        or  Color3.fromRGB(70, 100, 150)
-                end
 
                 MakeCollapsible(F, FULL_H, HEADER_H)
 
-                local SB=Instance.new("TextBox")
-                SB.Size=UDim2.new(1,-18,0,34); SB.Position=UDim2.new(0,9,0,44)
-                SB.BackgroundColor3=Color3.fromRGB(10,10,14); SB.BorderSizePixel=0
-                SB.PlaceholderText="プレイヤーを検索..."
-                SB.PlaceholderColor3=Color3.fromRGB(75,80,95); SB.Text=""
-                SB.TextColor3=Color3.fromRGB(255,255,255); SB.TextSize=16
-                SB.Font=Enum.Font.SourceSans; SB.ClearTextOnFocus=false; SB.Parent=F; CC(SB,6)
+                local Sep = Instance.new("Frame")
+                Sep.Size = UDim2.new(1, -24, 0, 1); Sep.Position = UDim2.new(0, 12, 0, 42)
+                Sep.BackgroundColor3 = Color3.fromRGB(28, 28, 38); Sep.BorderSizePixel = 0; Sep.Parent = F
 
-                local PS=Instance.new("ScrollingFrame")
-                PS.Size=UDim2.new(1,-16,1,-88); PS.Position=UDim2.new(0,8,0,82)
-                PS.BackgroundTransparency=1; PS.BorderSizePixel=0
-                PS.ScrollBarThickness=3; PS.ScrollBarImageColor3=Color3.fromRGB(55,55,65); PS.Parent=F
-                local PL=Instance.new("UIListLayout"); PL.Padding=UDim.new(0,5); PL.Parent=PS
+                local PS = Instance.new("ScrollingFrame")
+                PS.Size = UDim2.new(1, -12, 0, 286); PS.Position = UDim2.new(0, 6, 0, 50)
+                PS.BackgroundTransparency = 1; PS.BorderSizePixel = 0
+                PS.ScrollBarThickness = 3; PS.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+                PS.ScrollingDirection = Enum.ScrollingDirection.Y; PS.Parent = F
+                local PL = Instance.new("UIListLayout")
+                PL.Padding = UDim.new(0, 4); PL.SortOrder = Enum.SortOrder.LayoutOrder; PL.Parent = PS
+                local PP = Instance.new("UIPadding")
+                PP.PaddingTop = UDim.new(0, 4); PP.PaddingBottom = UDim.new(0, 4)
+                PP.PaddingLeft = UDim.new(0, 4); PP.PaddingRight = UDim.new(0, 4); PP.Parent = PS
                 PL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    PS.CanvasSize=UDim2.new(0,0,0,PL.AbsoluteContentSize.Y+8)
+                    PS.CanvasSize = UDim2.new(0, 0, 0, PL.AbsoluteContentSize.Y + 8)
                 end)
 
-                -- カードの選択/解除ビジュアルを適用する内部関数
-                local function ApplyCardVisual(Card, Stk, isSelected)
-                    if isSelected then
-                        TW(Stk, {Color=Color3.fromRGB(55,180,100)}, 0.2)
-                        Stk.Thickness = 2
-                        TW(Card, {BackgroundColor3=Color3.fromRGB(14,26,16)}, 0.2)
+                -- 全選択 / 全解除ボタンエリア
+                local CtrlRow = Instance.new("Frame")
+                CtrlRow.Size = UDim2.new(1, -12, 0, 32)
+                CtrlRow.Position = UDim2.new(0, 6, 0, 342)
+                CtrlRow.BackgroundTransparency = 1; CtrlRow.BorderSizePixel = 0; CtrlRow.Parent = F
+
+                local function MkCtrlBtn(txt, bg, xScale)
+                    local b = Instance.new("TextButton")
+                    b.Size = UDim2.new(0.49, 0, 1, 0); b.Position = UDim2.new(xScale, 0, 0, 0)
+                    b.BackgroundColor3 = bg; b.BorderSizePixel = 0
+                    b.Text = txt; b.TextColor3 = Color3.fromRGB(210, 215, 230)
+                    b.TextSize = 14; b.Font = Enum.Font.GothamSemibold
+                    b.AutoButtonColor = false; b.Parent = CtrlRow; CC(b, 6)
+                    b.MouseEnter:Connect(function() TW(b, {BackgroundTransparency = 0.3}, 0.1) end)
+                    b.MouseLeave:Connect(function() TW(b, {BackgroundTransparency = 0}, 0.1) end)
+                    return b
+                end
+                local SelAllBtn  = MkCtrlBtn("全選択", Color3.fromRGB(28, 52, 95), 0)
+                local DeselAllBtn = MkCtrlBtn("全解除", Color3.fromRGB(38, 24, 24), 0.51)
+
+                local function UpdateCountLbl()
+                    local count = 0
+                    for _ in pairs(selectedTable) do count = count + 1 end
+                    CountLbl.Text = "選択: " .. count
+                end
+
+                local function ApplyCardVisual(card, stroke, active)
+                    if active then
+                        TW(card, {BackgroundColor3 = Color3.fromRGB(22, 42, 76)}, 0.15)
+                        stroke.Color = Color3.fromRGB(50, 130, 255); stroke.Thickness = 1.8
                     else
-                        TW(Stk, {Color=Color3.fromRGB(36,36,46)}, 0.2)
-                        Stk.Thickness = 1.5
-                        TW(Card, {BackgroundColor3=Color3.fromRGB(20,20,26)}, 0.2)
+                        TW(card, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.15)
+                        stroke.Color = Color3.fromRGB(36, 36, 46); stroke.Thickness = 1.5
                     end
                 end
 
-                local function MkCard(player)
-                    if PS:FindFirstChild("p_"..player.UserId) then return end
-                    local Card=Instance.new("Frame")
-                    Card.Name="p_"..player.UserId; Card.Size=UDim2.new(1,-4,0,60)
-                    Card.BackgroundColor3=Color3.fromRGB(20,20,26); Card.BorderSizePixel=0
-                    Card.Parent=PS; CC(Card,7)
-                    local Stk=CS(Card,Color3.fromRGB(36,36,46),1.5)
-                    local Ico=Instance.new("ImageLabel")
-                    Ico.Size=UDim2.new(0,44,0,44); Ico.Position=UDim2.new(0,8,0.5,-22)
-                    Ico.BackgroundTransparency=1
-                    Ico.Image="rbxthumb://type=AvatarHeadShot&id="..player.UserId.."&w=150&h=150"
-                    Ico.Parent=Card; CC(Ico,100)
-                    MkLabel(Card,{Size=UDim2.new(1,-66,0,24),Position=UDim2.new(0,58,0.08,0),
-                        Text=player.DisplayName,TextSize=18,Font=Enum.Font.SourceSansBold})
-                    MkLabel(Card,{Size=UDim2.new(1,-66,0,17),Position=UDim2.new(0,58,0.60,0),
-                        Text="@"..player.Name,TextSize=14,Font=Enum.Font.SourceSans,
-                        TextColor3=Color3.fromRGB(65,125,195)})
+                local function BuildCard(plr)
+                    local c = Instance.new("Frame")
+                    c.Name = "p_" .. plr.UserId
+                    c.Size = UDim2.new(1, 0, 0, 48)
+                    c.BackgroundColor3 = selectedTable[plr.Name] and Color3.fromRGB(22, 42, 76) or Color3.fromRGB(20, 20, 26)
+                    c.BorderSizePixel = 0; c.Parent = PS
+                    CC(c, 7)
+                    local s = CS(c,
+                        selectedTable[plr.Name] and Color3.fromRGB(50, 130, 255) or Color3.fromRGB(36, 36, 46),
+                        selectedTable[plr.Name] and 1.8 or 1.5)
 
-                    -- チェックマークアイコン（選択時に表示）
-                    local CheckLbl = MkLabel(Card, {
-                        Size=UDim2.new(0,22,0,22), Position=UDim2.new(1,-28,0.5,-11),
-                        Text="✓", TextSize=16, Font=Enum.Font.GothamBold,
-                        TextColor3=Color3.fromRGB(55,210,100),
-                        TextXAlignment=Enum.TextXAlignment.Center,
-                        TextTransparency=1,  -- 未選択時は非表示
+                    local Ico = Instance.new("ImageLabel")
+                    Ico.Size = UDim2.new(0, 36, 0, 36); Ico.Position = UDim2.new(0, 8, 0.5, -18)
+                    Ico.BackgroundColor3 = Color3.fromRGB(26, 26, 36); Ico.BorderSizePixel = 0
+                    Ico.Image = "rbxthumb://type=AvatarHeadShot&id=" .. plr.UserId .. "&w=150&h=150"
+                    Ico.Parent = c; CC(Ico, 100)
+
+                    MkLabel(c, {
+                        Size = UDim2.new(1, -100, 0, 22), Position = UDim2.new(0, 52, 0, 5),
+                        Text = plr.DisplayName, TextSize = 15, Font = Enum.Font.SourceSansBold,
+                        TextColor3 = Color3.fromRGB(225, 230, 245),
                     })
-                    CheckLbl.Name = "_CheckMark"  -- 名前で確実に識別できるようにする
+                    MkLabel(c, {
+                        Size = UDim2.new(1, -100, 0, 18), Position = UDim2.new(0, 52, 0, 26),
+                        Text = "@" .. plr.Name, TextSize = 13, Font = Enum.Font.SourceSans,
+                        TextColor3 = Color3.fromRGB(75, 120, 185),
+                    })
 
-                    -- 既に選択中なら即時ビジュアル適用
-                    if selectedTable[player.Name] then
-                        Card.BackgroundColor3 = Color3.fromRGB(14,26,16)
-                        Stk.Color = Color3.fromRGB(55,180,100)
-                        Stk.Thickness = 2
-                        CheckLbl.TextTransparency = 0
-                    end
+                    -- ✓マーク
+                    local ChkF = Instance.new("Frame")
+                    ChkF.Size = UDim2.new(0, 22, 0, 22); ChkF.Position = UDim2.new(1, -32, 0.5, -11)
+                    ChkF.BackgroundColor3 = Color3.fromRGB(42, 138, 242); ChkF.BorderSizePixel = 0
+                    ChkF.BackgroundTransparency = selectedTable[plr.Name] and 0 or 1
+                    ChkF.Parent = c; CC(ChkF, 6)
+                    local ChkLbl = MkLabel(ChkF, {
+                        Size = UDim2.new(1, 0, 1, 0), Text = "✓", TextSize = 13,
+                        Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(255, 255, 255),
+                        TextXAlignment = Enum.TextXAlignment.Center,
+                        TextTransparency = selectedTable[plr.Name] and 0 or 1,
+                    })
 
-                    local Hit=Instance.new("TextButton")
-                    Hit.Size=UDim2.new(1,0,1,0); Hit.BackgroundTransparency=1; Hit.Text=""; Hit.Parent=Card
+                    local hitBtn = Instance.new("TextButton")
+                    hitBtn.Size = UDim2.new(1, 0, 1, 0); hitBtn.BackgroundTransparency = 1
+                    hitBtn.Text = ""; hitBtn.AutoButtonColor = false; hitBtn.ZIndex = 5; hitBtn.Parent = c
 
-                    Hit.MouseEnter:Connect(function()
-                        if not selectedTable[player.Name] then
-                            TW(Card,{BackgroundColor3=Color3.fromRGB(26,26,32)},0.1)
-                        end
-                    end)
-                    Hit.MouseLeave:Connect(function()
-                        if not selectedTable[player.Name] then
-                            TW(Card,{BackgroundColor3=Color3.fromRGB(20,20,26)},0.1)
-                        end
-                    end)
-
-                    Hit.MouseButton1Click:Connect(function()
-                        -- テーブルへの追加/削除トグル
-                        if not selectedTable[player.Name] then
-                            -- ── 選択追加 ──
-                            selectedTable[player.Name] = true
-                            MyEngine.KillList[player.UserId] = true
-                            MyEngine.Blacklist[player.UserId] = player.Name
-                            ApplyCardVisual(Card, Stk, true)
-                            TW(CheckLbl, {TextTransparency=0}, 0.15)
-                            UpdateCountLbl()
-                            AddLog("選択追加: "..player.Name.." (計"..
-                                (function() local n=0; for _ in pairs(selectedTable) do n=n+1 end; return n end)()
-                                .."人)","Action")
-                            if Data.Callback then pcall(Data.Callback, player, true, selectedTable) end
+                    hitBtn.MouseButton1Click:Connect(function()
+                        if selectedTable[plr.Name] then
+                            selectedTable[plr.Name] = nil
+                            MyEngine.KillList[plr.UserId] = nil
+                            MyEngine.Blacklist[plr.UserId] = nil
+                            ApplyCardVisual(c, s, false)
+                            TW(ChkF, {BackgroundTransparency = 1}, 0.15)
+                            TW(ChkLbl, {TextTransparency = 1}, 0.15)
                         else
-                            -- ── 選択解除 ──
-                            selectedTable[player.Name] = nil
-                            MyEngine.KillList[player.UserId] = nil
-                            MyEngine.Blacklist[player.UserId] = nil
-                            ApplyCardVisual(Card, Stk, false)
-                            TW(CheckLbl, {TextTransparency=1}, 0.15)
-                            UpdateCountLbl()
-                            AddLog("選択解除: "..player.Name,"Action")
-                            if Data.Callback then pcall(Data.Callback, player, false, selectedTable) end
+                            selectedTable[plr.Name] = true
+                            MyEngine.KillList[plr.UserId] = true
+                            MyEngine.Blacklist[plr.UserId] = plr.Name
+                            ApplyCardVisual(c, s, true)
+                            TW(ChkF, {BackgroundTransparency = 0}, 0.15)
+                            TW(ChkLbl, {TextTransparency = 0}, 0.15)
                         end
+                        UpdateCountLbl()
+                        if Data.Callback then pcall(Data.Callback, plr, selectedTable[plr.Name] ~= nil, selectedTable) end
+                    end)
+
+                    hitBtn.MouseEnter:Connect(function()
+                        if not selectedTable[plr.Name] then TW(c, {BackgroundColor3 = Color3.fromRGB(24, 24, 32)}, 0.1) end
+                    end)
+                    hitBtn.MouseLeave:Connect(function()
+                        if not selectedTable[plr.Name] then TW(c, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.1) end
                     end)
                 end
 
-                local function Refresh()
-                    for _,c in pairs(PS:GetChildren()) do
-                        if c:IsA("Frame") then
-                            local uid=tonumber(c.Name:match("p_(%d+)"))
-                            if uid and not Players:GetPlayerByUserId(uid) then c:Destroy() end
-                        end
-                    end
-                    for _,p in pairs(Players:GetPlayers()) do
-                        if p~=LocalPlayer then MkCard(p) end
-                    end
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer or Data.ShowSelf then BuildCard(p) end
                 end
-
-                SB:GetPropertyChangedSignal("Text"):Connect(function()
-                    local s=SB.Text:lower()
-                    for _,c in pairs(PS:GetChildren()) do
-                        if c:IsA("Frame") then
-                            local uid=tonumber(c.Name:match("p_(%d+)"))
-                            if uid then
-                                local p=Players:GetPlayerByUserId(uid)
-                                c.Visible=p and(s=="" or p.DisplayName:lower():find(s,1,true)~=nil
-                                    or p.Name:lower():find(s,1,true)~=nil) or false
-                            end
-                        end
-                    end
-                end)
 
                 Players.PlayerAdded:Connect(function(p)
-                    task.wait(0.5); Refresh()
-                    -- 既に選択テーブルに入っていたプレイヤーが戻ってきた場合
-                    if selectedTable[p.Name] then
-                        AddLog("選択済みプレイヤー再参加: "..p.Name,"Warning")
-                        MyEngine.KillList[p.UserId] = true
-                        task.wait(0.5); Refresh()
-                        -- カードのビジュアルを復元
-                        local c = PS:FindFirstChild("p_"..p.UserId)
-                        if c then
-                            local s = c:FindFirstChildOfClass("UIStroke")
-                            if s then s.Color=Color3.fromRGB(55,180,100); s.Thickness=2 end
-                            c.BackgroundColor3 = Color3.fromRGB(14,26,16)
-                        end
-                    end
+                    if p ~= LocalPlayer or Data.ShowSelf then BuildCard(p) end
                 end)
-                Players.PlayerRemoving:Connect(function() task.wait(0.5); Refresh() end)
+                Players.PlayerRemoving:Connect(function(p)
+                    selectedTable[p.Name] = nil
+                    MyEngine.KillList[p.UserId] = nil
+                    MyEngine.Blacklist[p.UserId] = nil
+                    local c = PS:FindFirstChild("p_" .. p.UserId)
+                    if c then
+                        TW(c, {BackgroundTransparency = 1}, 0.15)
+                        task.delay(0.18, function() pcall(function() c:Destroy() end) end)
+                    end
+                    UpdateCountLbl()
+                end)
 
-                Refresh()
-                UpdateCountLbl()
-
-                -- ================================================================
-                --  戻り値: Elem（マルチ選択テーブルを外部から操作するための API）
-                -- ================================================================
                 local Elem = {}
-
-                -- 現在選択中の全プレイヤーをテーブルで返す（シャローコピー）
-                -- 戻り値: { [playerName] = true, ... }
-                function Elem:GetSelected()
-                    local copy = {}
-                    for k, v in pairs(selectedTable) do copy[k] = v end
-                    return copy
-                end
-
-                -- 指定プレイヤーが選択中か判定
+                function Elem:GetSelected() return selectedTable end
                 function Elem:IsSelected(player)
                     return selectedTable[player.Name] == true
                 end
-
-                -- 全選択を解除し UI を更新
                 function Elem:ClearAll()
-                    for name, _ in pairs(selectedTable) do
-                        selectedTable[name] = nil
-                    end
-                    -- KillList / Blacklist も連動してクリア
-                    MyEngine.KillList = {}
-                    MyEngine.Blacklist = {}
-                    -- 全カードのビジュアルをリセット
                     for _, c in pairs(PS:GetChildren()) do
                         if c:IsA("Frame") then
                             local s = c:FindFirstChildOfClass("UIStroke")
                             if s then
-                                s.Color = Color3.fromRGB(36,36,46)
-                                s.Thickness = 1.5
+                                s.Color = Color3.fromRGB(36, 36, 46); s.Thickness = 1.5
                             end
-                            TW(c, {BackgroundColor3=Color3.fromRGB(20,20,26)}, 0.15)
-                            local chk = c:FindFirstChild("_CheckMark")
-                            if chk then TW(chk, {TextTransparency=1}, 0.15) end
+                            TW(c, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.15)
+                            for _, lbl in pairs(c:GetDescendants()) do
+                                if lbl:IsA("TextLabel") and lbl.Text == "✓" then
+                                    TW(lbl, {TextTransparency = 1}, 0.15)
+                                end
+                            end
                         end
                     end
+                    selectedTable = {}
                     UpdateCountLbl()
-                    AddLog("全選択を解除しました","Action")
+                    AddLog("全選択を解除しました", "Action")
                 end
-
-                -- 指定プレイヤーをプログラムから選択状態にする
                 function Elem:SelectPlayer(player)
                     if not player or selectedTable[player.Name] then return end
                     selectedTable[player.Name] = true
                     MyEngine.KillList[player.UserId] = true
                     MyEngine.Blacklist[player.UserId] = player.Name
-                    local c = PS:FindFirstChild("p_"..player.UserId)
+                    local c = PS:FindFirstChild("p_" .. player.UserId)
                     if c then
                         local s = c:FindFirstChildOfClass("UIStroke")
                         if s then ApplyCardVisual(c, s, true) end
-                        local chk = c:FindFirstChild("_CheckMark")
-                        if chk then TW(chk, {TextTransparency=0}, 0.15) end
+                        for _, lbl in pairs(c:GetDescendants()) do
+                            if lbl:IsA("TextLabel") and lbl.Text == "✓" then
+                                TW(lbl, {TextTransparency = 0}, 0.15)
+                            end
+                        end
                     end
                     UpdateCountLbl()
                     if Data.Callback then pcall(Data.Callback, player, true, selectedTable) end
                 end
-
-                -- 指定プレイヤーをプログラムから選択解除する
                 function Elem:DeselectPlayer(player)
                     if not player or not selectedTable[player.Name] then return end
                     selectedTable[player.Name] = nil
                     MyEngine.KillList[player.UserId] = nil
                     MyEngine.Blacklist[player.UserId] = nil
-                    local c = PS:FindFirstChild("p_"..player.UserId)
+                    local c = PS:FindFirstChild("p_" .. player.UserId)
                     if c then
                         local s = c:FindFirstChildOfClass("UIStroke")
                         if s then ApplyCardVisual(c, s, false) end
-                        local chk = c:FindFirstChild("_CheckMark")
-                        if chk then TW(chk, {TextTransparency=1}, 0.15) end
+                        for _, lbl in pairs(c:GetDescendants()) do
+                            if lbl:IsA("TextLabel") and lbl.Text == "✓" then
+                                TW(lbl, {TextTransparency = 1}, 0.15)
+                            end
+                        end
                     end
                     UpdateCountLbl()
                     if Data.Callback then pcall(Data.Callback, player, false, selectedTable) end
                 end
+
+                -- 全選択ボタン
+                SelAllBtn.MouseButton1Click:Connect(function()
+                    for _, p in pairs(Players:GetPlayers()) do
+                        if p ~= LocalPlayer or Data.ShowSelf then
+                            if not selectedTable[p.Name] then
+                                Elem:SelectPlayer(p)
+                            end
+                        end
+                    end
+                    AddLog("全プレイヤーを選択しました", "Action")
+                end)
+                DeselAllBtn.MouseButton1Click:Connect(function()
+                    Elem:ClearAll()
+                end)
 
                 return Elem
             end
@@ -1697,62 +2090,67 @@ function MyEngine:CreateWindow(Config)
                 local FULL_H   = 300
                 local HEADER_H = 48
 
-                local F=Instance.new("Frame")
-                F.Size=UDim2.new(1,0,0,FULL_H); F.BackgroundColor3=Color3.fromRGB(16,16,20)
-                F.BorderSizePixel=0; F.Parent=container; CC(F,8); CS(F,Color3.fromRGB(34,34,42),1)
+                local F = Instance.new("Frame")
+                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+                F.BorderSizePixel = 0; F.Parent = container; CC(F, 8); CS(F, Color3.fromRGB(34, 34, 42), 1)
 
-                MkLabel(F,{
-                    Size=UDim2.new(1,-55,0,30),Position=UDim2.new(0,14,0,9),
-                    Text="サーバー情報",TextSize=18,Font=Enum.Font.SourceSansBold,
-                    TextColor3=Color3.fromRGB(255,255,255),
+                MkLabel(F, {
+                    Size = UDim2.new(1, -55, 0, 30), Position = UDim2.new(0, 14, 0, 9),
+                    Text = "サーバー情報", TextSize = 18, Font = Enum.Font.SourceSansBold,
+                    TextColor3 = Color3.fromRGB(255, 255, 255),
                 })
 
                 MakeCollapsible(F, FULL_H, HEADER_H)
 
-                local Sep=Instance.new("Frame")
-                Sep.Size=UDim2.new(1,-24,0,1); Sep.Position=UDim2.new(0,12,0,40)
-                Sep.BackgroundColor3=Color3.fromRGB(28,28,38); Sep.BorderSizePixel=0; Sep.Parent=F
-                local function Row(lbl,y)
-                    MkLabel(F,{Size=UDim2.new(0.42,-4,0,26),Position=UDim2.new(0,16,0,y),
-                        Text=lbl,TextSize=15,Font=Enum.Font.GothamSemibold,
-                        TextColor3=Color3.fromRGB(95,115,155)})
-                    local v=MkLabel(F,{Size=UDim2.new(0.58,-4,0,26),Position=UDim2.new(0.42,0,0,y),
-                        Text="…",TextSize=15,Font=Enum.Font.SourceSans,
-                        TextColor3=Color3.fromRGB(200,210,230)})
+                local Sep = Instance.new("Frame")
+                Sep.Size = UDim2.new(1, -24, 0, 1); Sep.Position = UDim2.new(0, 12, 0, 40)
+                Sep.BackgroundColor3 = Color3.fromRGB(28, 28, 38); Sep.BorderSizePixel = 0; Sep.Parent = F
+
+                local function Row(lbl, y)
+                    MkLabel(F, {Size = UDim2.new(0.42, -4, 0, 26), Position = UDim2.new(0, 16, 0, y),
+                        Text = lbl, TextSize = 15, Font = Enum.Font.GothamSemibold,
+                        TextColor3 = Color3.fromRGB(95, 115, 155)})
+                    local v = MkLabel(F, {Size = UDim2.new(0.58, -4, 0, 26), Position = UDim2.new(0.42, 0, 0, y),
+                        Text = "…", TextSize = 15, Font = Enum.Font.SourceSans,
+                        TextColor3 = Color3.fromRGB(200, 210, 230)})
                     return v
                 end
-                local vSrv  = Row("サーバーID",   46)
-                local vPly  = Row("プレイヤー数",  74)
-                local vPing = Row("Ping",         102)
-                local vFPS  = Row("FPS",          130)
-                local vUp   = Row("稼働時間",     158)
-                local vGame = Row("ゲーム名",     186)
-                local vPID  = Row("PlaceID",      214)
-                local vMe   = Row("自分のUserId",  242)
+                local vSrv  = Row("サーバーID",     46)
+                local vPly  = Row("プレイヤー数",    74)
+                local vPing = Row("Ping",           102)
+                local vFPS  = Row("FPS",            130)
+                local vUp   = Row("稼働時間",       158)
+                local vGame = Row("ゲーム名",       186)
+                local vPID  = Row("PlaceID",        214)
+                local vMe   = Row("自分のUserId",    242)
+
                 pcall(function()
-                    local jid=tostring(game.JobId)
-                    vSrv.Text=jid~="" and (jid:sub(1,18).."...") or "ローカル"
-                    vGame.Text=tostring(game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
+                    local jid = tostring(game.JobId)
+                    vSrv.Text = jid ~= "" and (jid:sub(1, 18) .. "...") or "ローカル"
+                    vGame.Text = tostring(game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
                 end)
-                pcall(function() vPID.Text=tostring(game.PlaceId) end)
-                pcall(function() vMe.Text=tostring(LocalPlayer.UserId) end)
-                local startT=tick(); local lastPing=0
+                pcall(function() vPID.Text = tostring(game.PlaceId) end)
+                pcall(function() vMe.Text = tostring(LocalPlayer.UserId) end)
+
+                local startT = tick(); local lastPing = 0
                 local function UpdLive()
                     pcall(function()
-                        lastPing=math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+                        lastPing = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
                     end)
-                    local pc=Color3.fromRGB(65,210,100)
-                    if lastPing>300 then pc=Color3.fromRGB(215,70,70)
-                    elseif lastPing>150 then pc=Color3.fromRGB(240,175,45) end
-                    vPing.Text=lastPing.." ms"; vPing.TextColor3=pc
-                    local fps=0
+                    local pc = Color3.fromRGB(65, 210, 100)
+                    if lastPing > 300 then pc = Color3.fromRGB(215, 70, 70)
+                    elseif lastPing > 150 then pc = Color3.fromRGB(240, 175, 45) end
+                    vPing.Text = lastPing .. " ms"; vPing.TextColor3 = pc
+                    local fps = 0
                     pcall(function()
-                        local s=tick(); RunService.RenderStepped:Wait(); fps=math.floor(1/(tick()-s))
+                        local s = tick(); RunService.RenderStepped:Wait()
+                        fps = math.floor(1 / (tick() - s))
                     end)
-                    vFPS.Text=fps.." fps"
-                    local e=tick()-startT
-                    vUp.Text=string.format("%02d:%02d:%02d",math.floor(e/3600),math.floor(e/60)%60,math.floor(e)%60)
-                    vPly.Text=tostring(#Players:GetPlayers()).." / "..tostring(Players.MaxPlayers)
+                    vFPS.Text = fps .. " fps"
+                    local e = tick() - startT
+                    vUp.Text = string.format("%02d:%02d:%02d",
+                        math.floor(e / 3600), math.floor(e / 60) % 60, math.floor(e) % 60)
+                    vPly.Text = tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers)
                 end
                 task.spawn(function() while F.Parent do pcall(UpdLive); task.wait(1) end end)
             end
@@ -1774,42 +2172,198 @@ end
 
 -- ================================================================
 --  通知
+--  Data: {Title, Content, Duration, Type}
+--  Type: "Info" | "Success" | "Warning" | "Error"  (デフォルト "Info")
 -- ================================================================
+local NOTIFY_TYPE_CONFIG = {
+    Info    = {Color = Color3.fromRGB(45, 145, 255),  Icon = "ℹ"},
+    Success = {Color = Color3.fromRGB(55, 210, 115),  Icon = "✓"},
+    Warning = {Color = Color3.fromRGB(240, 175, 45),  Icon = "⚠"},
+    Error   = {Color = Color3.fromRGB(215, 70, 70),   Icon = "✕"},
+}
+
+-- 通知スタック管理（重複しないよう Y オフセット）
+local _notifyStack = {}
+local _notifyBase  = -20
+local _notifyGap   = 96
+
+local function GetNotifyYOffset()
+    local idx = #_notifyStack + 1
+    return _notifyBase - (idx - 1) * _notifyGap
+end
+
 function MyEngine:Notify(Data)
-    local NG=Instance.new("ScreenGui")
-    NG.Name="afNotify"; NG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-    NG.DisplayOrder=101
-    pcall(function() NG.IgnoreGuiInset=true end)
-    NG.Parent=LocalPlayer:WaitForChild("PlayerGui")
-    local NF=Instance.new("Frame")
-    NF.Size=UDim2.new(0,308,0,84); NF.Position=UDim2.new(1,10,1,-20)
-    NF.AnchorPoint=Vector2.new(1,1); NF.BackgroundColor3=Color3.fromRGB(16,16,20)
-    NF.BorderSizePixel=0; NF.Parent=NG
-    CC(NF,10); CS(NF,Color3.fromRGB(45,145,255),1.5)
-    local Bar=Instance.new("Frame")
-    Bar.Size=UDim2.new(0,3,1,-16); Bar.Position=UDim2.new(0,8,0,8)
-    Bar.BackgroundColor3=Color3.fromRGB(45,145,255); Bar.BorderSizePixel=0; Bar.Parent=NF; CC(Bar,100)
-    MkLabel(NF,{Size=UDim2.new(1,-28,0,25),Position=UDim2.new(0,20,0,10),
-        Text=Data.Title or "通知",TextSize=16,Font=Enum.Font.SourceSansBold})
-    MkLabel(NF,{Size=UDim2.new(1,-28,0,36),Position=UDim2.new(0,20,0,35),
-        Text=Data.Content or "",TextSize=15,Font=Enum.Font.SourceSans,
-        TextColor3=Color3.fromRGB(175,180,200),TextWrapped=true})
+    local cfg = NOTIFY_TYPE_CONFIG[Data.Type or "Info"] or NOTIFY_TYPE_CONFIG.Info
+    local accentColor = cfg.Color
+    local icon        = cfg.Icon
+
+    local yOff = GetNotifyYOffset()
+    local entry = {}; table.insert(_notifyStack, entry)
+
+    local NG = Instance.new("ScreenGui")
+    NG.Name = "afNotify"; NG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    NG.DisplayOrder = 101
+    pcall(function() NG.IgnoreGuiInset = true end)
+    NG.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+    local NF = Instance.new("Frame")
+    NF.Size = UDim2.new(0, 318, 0, 84)
+    NF.Position = UDim2.new(1, 10, 1, yOff)
+    NF.AnchorPoint = Vector2.new(1, 1)
+    NF.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+    NF.BorderSizePixel = 0; NF.Parent = NG
+    CC(NF, 10); CS(NF, accentColor, 1.5)
+
+    -- 左カラーバー
+    local Bar = Instance.new("Frame")
+    Bar.Size = UDim2.new(0, 3, 1, -16); Bar.Position = UDim2.new(0, 8, 0, 8)
+    Bar.BackgroundColor3 = accentColor; Bar.BorderSizePixel = 0; Bar.Parent = NF; CC(Bar, 100)
+
+    -- アイコン
+    local IcoLbl = MkLabel(NF, {
+        Size = UDim2.new(0, 22, 0, 22), Position = UDim2.new(0, 18, 0, 10),
+        Text = icon, TextSize = 18, Font = Enum.Font.GothamBold,
+        TextColor3 = accentColor, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2,
+    })
+
+    MkLabel(NF, {
+        Size = UDim2.new(1, -52, 0, 25), Position = UDim2.new(0, 46, 0, 8),
+        Text = Data.Title or "通知", TextSize = 16, Font = Enum.Font.SourceSansBold,
+        ZIndex = 2,
+    })
+    MkLabel(NF, {
+        Size = UDim2.new(1, -52, 0, 36), Position = UDim2.new(0, 46, 0, 33),
+        Text = Data.Content or "", TextSize = 15, Font = Enum.Font.SourceSans,
+        TextColor3 = Color3.fromRGB(175, 180, 200), TextWrapped = true, ZIndex = 2,
+    })
+
+    -- 底辺プログレスバー
+    local ProgBG = Instance.new("Frame")
+    ProgBG.Size = UDim2.new(1, -16, 0, 2); ProgBG.Position = UDim2.new(0, 8, 1, -5)
+    ProgBG.BackgroundColor3 = Color3.fromRGB(28, 28, 38); ProgBG.BorderSizePixel = 0; ProgBG.Parent = NF; CC(ProgBG, 100)
+    local ProgFil = Instance.new("Frame")
+    ProgFil.Size = UDim2.new(1, 0, 1, 0); ProgFil.BackgroundColor3 = accentColor
+    ProgFil.BorderSizePixel = 0; ProgFil.Parent = ProgBG; CC(ProgFil, 100)
+
     task.spawn(function()
-        TW(NF,{Position=UDim2.new(1,-10,1,-20)},0.42,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-        task.wait(Data.Duration or 3)
-        TW(NF,{Position=UDim2.new(1,10,1,-20)},0.28,Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-        task.wait(0.3); NG:Destroy()
+        TW(NF, {Position = UDim2.new(1, -10, 1, yOff)}, 0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        local dur = Data.Duration or 3
+        TW(ProgFil, {Size = UDim2.new(0, 0, 1, 0)}, dur, Enum.EasingStyle.Linear)
+        task.wait(dur)
+        TW(NF, {Position = UDim2.new(1, 10, 1, yOff)}, 0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        task.wait(0.32)
+        pcall(function()
+            local idx = table.find(_notifyStack, entry)
+            if idx then table.remove(_notifyStack, idx) end
+            NG:Destroy()
+        end)
     end)
+
+    return entry
+end
+
+-- ================================================================
+--  設定の保存・読み込み (新機能)
+--  writefile / readfile が利用できる環境向け
+-- ================================================================
+function MyEngine:SaveConfig(name)
+    local filename = "afHub_" .. (name or "config") .. ".json"
+    local data = {}
+    for k, v in pairs(self.Flags) do
+        local t = type(v)
+        if t == "boolean" or t == "number" or t == "string" then
+            data[k] = v
+        end
+    end
+    local ok, json = pcall(function()
+        return HttpService:JSONEncode(data)
+    end)
+    if ok and json then
+        local ok2, err = pcall(function()
+            writefile(filename, json)
+        end)
+        if ok2 then
+            AddLog("設定を保存しました: " .. filename, "Success")
+        else
+            AddLog("設定の保存に失敗: " .. tostring(err), "Error")
+        end
+    else
+        AddLog("JSON変換に失敗しました", "Error")
+    end
+end
+
+function MyEngine:LoadConfig(name)
+    local filename = "afHub_" .. (name or "config") .. ".json"
+    local ok, json = pcall(function()
+        return readfile(filename)
+    end)
+    if ok and json then
+        local ok2, data = pcall(function()
+            return HttpService:JSONDecode(json)
+        end)
+        if ok2 and type(data) == "table" then
+            for k, v in pairs(data) do
+                self.Flags[k] = v
+            end
+            AddLog("設定を読み込みました: " .. filename, "Success")
+            return data
+        else
+            AddLog("設定ファイルのJSONが不正です", "Error")
+        end
+    else
+        AddLog("設定ファイルが見つかりません: " .. filename, "Warning")
+    end
+    return {}
+end
+
+-- ================================================================
+--  全GUI破棄 (新機能)
+-- ================================================================
+function MyEngine:Destroy()
+    -- 登録済みScreenGuiを全て破棄
+    for _, sg in pairs(self._ScreenGuis) do
+        pcall(function() sg:Destroy() end)
+    end
+    self._ScreenGuis = {}
+    -- 通知も破棄
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if pg then
+        for _, c in pairs(pg:GetChildren()) do
+            if c.Name == "afNotify" then
+                pcall(function() c:Destroy() end)
+            end
+        end
+    end
+    _notifyStack = {}
+    AddLog = function() end -- ログ追加を無効化
+    print("[af_hub] GUI を破棄しました")
+end
+
+-- ================================================================
+--  AddLog 公開
+-- ================================================================
+function MyEngine:Log(msg, t)
+    AddLog(msg, t)
 end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v3.3 PATCH 起動完了 | トグルキー: "..tostring(MyEngine.ToggleKey))
-print("[af_hub] v3.3 PATCH: CreatePlayerList がテーブル式マルチ選択に対応しました")
-print("[af_hub] 使い方: local list = Tab:CreatePlayerList({...})")
-print("[af_hub]   list:GetSelected()          → 選択中テーブル { [name]=true }")
-print("[af_hub]   list:IsSelected(player)     → bool")
-print("[af_hub]   list:ClearAll()             → 全解除")
-print("[af_hub]   list:SelectPlayer(player)   → プログラムから選択")
-print("[af_hub]   list:DeselectPlayer(player) → プログラムから解除")
+print("[af_hub] v4.0 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
+print("[af_hub] ─── V4.0 新機能 ───────────────────────────────────────")
+print("[af_hub] [FIX] CreateLabel :Set()/:Get() が機能しないバグ修正済み")
+print("[af_hub] [FIX] CreateColorPicker S/Vグラデーション更新バグ修正済み")
+print("[af_hub] [FIX] CreateSection/Paragraph/Button 戻り値バグ修正済み")
+print("[af_hub] [NEW] Tab:CreateMultiDropdown({Name,Options,CurrentOptions,MaxSelection,Callback})")
+print("[af_hub] [NEW] Tab:CreateProgressBar({Name,MinValue,MaxValue,CurrentValue,Suffix,Color})")
+print("[af_hub] [NEW] Tab:CreateDivider({Thickness,Color})")
+print("[af_hub] [NEW] Tab:CreateInput() — CreateTextInputのエイリアス")
+print("[af_hub] [NEW] Tab:Select()      — プログラムからタブを切り替える")
+print("[af_hub] [NEW] Window:Dialog({Title,Content,Buttons={{Title,Color,Callback}...}})")
+print("[af_hub] [NEW] Window:Destroy()  — ウィンドウを破棄する")
+print("[af_hub] [NEW] Rayfield:Notify({Title,Content,Duration,Type}) — Type対応")
+print("[af_hub] [NEW] Rayfield:SaveConfig('name') — Flagsを保存 (writefile必要)")
+print("[af_hub] [NEW] Rayfield:LoadConfig('name') — Flagsを読込 (readfile必要)")
+print("[af_hub] [NEW] Rayfield:Log('msg','Type')  — 任意ログ追加")
+print("[af_hub] [NEW] Rayfield:Destroy()          — 全GUI破棄")
+print("[af_hub] ─────────────────────────────────────────────────────────")
 return MyEngine
