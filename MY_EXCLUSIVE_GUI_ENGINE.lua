@@ -1,5 +1,15 @@
--- af_hub GUI ENGINE - ULTIMATE V4.1
+-- af_hub GUI ENGINE - ULTIMATE V4.3
 -- Rayfield互換 / 完全日本語 / 一人称視点対応
+-- V4.3 BUGFIX CHANGELOG:
+--   [FIX] スクロール不可バグ: 全オーバーレイTextButtonがマウスホイールを横取りしていた問題を修正
+--         (ForwardScrollヘルパーを追加し Toggle/Slider/Button/Dropdown/Keybind/ColorPicker/PlayerList すべてに適用)
+--   [FIX] TC.ScrollingDirection を Y 専用に設定（デフォルトXYが干渉していた）
+--   [FIX] TC UIPadding に PaddingLeft・PaddingBottom が欠落していた（要素が左端/下端で切れていた）
+--   [FIX] CollapsibleSection内要素にも scrollTarget を伝播（ネストしたセクション内でも正しくスクロール転送）
+--   [FIX] CreateDropdown / CreateMultiDropdown: DBボタンがSize 1,0で展開時にOCを覆いクリックをブロックするバグ修正 (→固定44px)
+--   [FIX] MakeDraggable: UserInputService.InputChangedが切断されないメモリリーク修正
+--   [FIX] CreateWindow: トグルキーInputBegan接続がSG破棄後も残るメモリリーク修正
+--   [FIX] CreatePlayerList: PlayerAdded/PlayerRemoving接続がF破棄後も残るメモリリーク修正
 -- V4.1 BUGFIX CHANGELOG:
 --   [FIX] CreateDropdown / CreateMultiDropdown: OCがF外側に配置されUIバグを起こす問題を修正 (UDim2 1,3 → 0,44 + ClipsDescendants)
 --   [FIX] CreateColorPicker: CPanelがF外側に配置されUIバグを起こす問題を修正 (同上)
@@ -380,6 +390,25 @@ local function PlayBoot(sg, onDone)
 end
 
 -- ================================================================
+--  スクロール転送ヘルパー
+--  TextButton はマウスホイールイベントを横取りして親ScrollingFrameに届かない。
+--  オーバーレイボタン全てにこれを適用して親へ転送する。
+-- ================================================================
+local SCROLL_SPEED = 40
+local function ForwardScroll(btn, scrollTarget)
+    if not btn or not scrollTarget then return end
+    btn.InputChanged:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseWheel then
+            local maxY = math.max(0, scrollTarget.AbsoluteCanvasSize.Y - scrollTarget.AbsoluteSize.Y)
+            scrollTarget.CanvasPosition = Vector2.new(
+                scrollTarget.CanvasPosition.X,
+                math.clamp(scrollTarget.CanvasPosition.Y - inp.Position.Z * SCROLL_SPEED, 0, maxY)
+            )
+        end
+    end)
+end
+
+-- ================================================================
 --  ドラッグ
 -- ================================================================
 local function MakeDraggable(handle, target)
@@ -397,12 +426,14 @@ local function MakeDraggable(handle, target)
         if inp.UserInputType == Enum.UserInputType.MouseMovement
         or inp.UserInputType == Enum.UserInputType.Touch then di = inp end
     end)
-    UserInputService.InputChanged:Connect(function(inp)
+    -- [FIX] グローバル接続を保持し、handle破棄時に切断してメモリリークを防止
+    local _dragConn = UserInputService.InputChanged:Connect(function(inp)
         if inp == di and drag then
             local d = inp.Position - ds
             target.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
         end
     end)
+    handle.Destroying:Connect(function() _dragConn:Disconnect() end)
 end
 
 -- ================================================================
@@ -567,12 +598,14 @@ function MyEngine:CreateWindow(Config)
         end
     end
 
-    UserInputService.InputBegan:Connect(function(inp)
+    -- [FIX] トグルキー接続を保持し、ウィンドウ破棄時に切断
+    local _toggleConn = UserInputService.InputBegan:Connect(function(inp)
         if inp.KeyCode == MyEngine.ToggleKey then
             if busy then return end
             if isMin then Minimize(false) else Open(not isOpen) end
         end
     end)
+    SG.Destroying:Connect(function() _toggleConn:Disconnect() end)
 
     MinBtn.MouseButton1Click:Connect(function() Minimize(true) end)
     CloseBtn.MouseButton1Click:Connect(function() Open(false) end)
@@ -745,11 +778,15 @@ function MyEngine:CreateWindow(Config)
         TC.Name = TabName .. "_C"; TC.Size = UDim2.new(1, 0, 1, 0)
         TC.BackgroundTransparency = 1; TC.BorderSizePixel = 0
         TC.ScrollBarThickness = 3; TC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+        -- [FIX] Y軸のみスクロール（デフォルトXYが干渉するため）
+        TC.ScrollingDirection = Enum.ScrollingDirection.Y
         TC.Visible = false; TC.Parent = CA
         local CL = Instance.new("UIListLayout")
         CL.Padding = UDim.new(0, 8); CL.SortOrder = Enum.SortOrder.LayoutOrder; CL.Parent = TC
         local CP = Instance.new("UIPadding")
-        CP.PaddingTop = UDim.new(0, 8); CP.PaddingRight = UDim.new(0, 10); CP.Parent = TC
+        -- [FIX] PaddingLeft と PaddingBottom が欠落していたため要素が切れていた
+        CP.PaddingTop = UDim.new(0, 8); CP.PaddingBottom = UDim.new(0, 12)
+        CP.PaddingLeft = UDim.new(0, 8); CP.PaddingRight = UDim.new(0, 10); CP.Parent = TC
         CL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             TC.CanvasSize = UDim2.new(0, 0, 0, CL.AbsoluteContentSize.Y + 18)
         end)
@@ -784,7 +821,10 @@ function MyEngine:CreateWindow(Config)
         -- ================================================================
         --  要素ビルダー（コンテナを引数に取り、全要素を生成して返す）
         -- ================================================================
-        local function buildCreators(container)
+        local function buildCreators(container, scrollTarget)
+            -- scrollTarget: マウスホイールを転送する親ScrollingFrame
+            -- containerがScrollingFrameならそれ自体、Frameならその上位のTCを使う
+            scrollTarget = scrollTarget or (container:IsA("ScrollingFrame") and container or TC)
             local Creators = {}
 
             -- ── セクション ────────────────────────────────────────
@@ -922,6 +962,8 @@ function MyEngine:CreateWindow(Config)
                 end)
                 B.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(26, 26, 32)}, 0.08) end)
                 B.MouseLeave:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.08) end)
+                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                ForwardScroll(B, scrollTarget)
                 local Elem = {}
                 function Elem:SetName(name)
                     B.Text = name or ""
@@ -977,6 +1019,8 @@ function MyEngine:CreateWindow(Config)
                 ApplyVisual(val, false)
                 HitBtn.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(26, 26, 32)}, 0.08) end)
                 HitBtn.MouseLeave:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.08) end)
+                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                ForwardScroll(HitBtn, scrollTarget)
                 HitBtn.MouseButton1Click:Connect(function()
                     val = not val; ApplyVisual(val, true)
                     if Data.Callback then pcall(Data.Callback, val) end
@@ -1067,6 +1111,8 @@ function MyEngine:CreateWindow(Config)
                 Hit.MouseLeave:Connect(function()
                     if not dr then TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.1) end
                 end)
+                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                ForwardScroll(Hit, scrollTarget)
                 local Elem = {}
                 function Elem:Set(v) Upd(v); if Data.Callback then pcall(Data.Callback, cur) end end
                 function Elem:Get() return cur end
@@ -1134,7 +1180,8 @@ function MyEngine:CreateWindow(Config)
                 F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
                 local DB = Instance.new("TextButton")
-                DB.Size = UDim2.new(1, 0, 1, 0); DB.BackgroundTransparency = 1
+                -- [FIX] 高さを44px固定に。1,0だとF展開時にOCを覆いクリックをブロックしていた
+                DB.Size = UDim2.new(1, 0, 0, 44); DB.BackgroundTransparency = 1
                 DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. (Data.CurrentOption or "未選択")
                 DB.TextColor3 = Color3.fromRGB(235, 235, 245); DB.TextSize = 17
                 DB.Font = Enum.Font.SourceSans; DB.TextXAlignment = Enum.TextXAlignment.Left; DB.Parent = F
@@ -1152,6 +1199,8 @@ function MyEngine:CreateWindow(Config)
                 OC.Visible = false; OC.ZIndex = 10; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
                 Instance.new("UIListLayout").Parent = OC
                 local op = false
+                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                ForwardScroll(DB, scrollTarget)
                 DB.MouseButton1Click:Connect(function()
                     op = not op; OC.Visible = op
                     if op then
@@ -1172,6 +1221,8 @@ function MyEngine:CreateWindow(Config)
                     OB.AutoButtonColor = false; OB.ZIndex = 11; OB.Parent = OC
                     OB.MouseEnter:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(28, 28, 36)}, 0.08) end)
                     OB.MouseLeave:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end)
+                    -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                    ForwardScroll(OB, scrollTarget)
                     OB.MouseButton1Click:Connect(function()
                         DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. opt
                         op = false; OC.Visible = false; Arr.Text = "▾"
@@ -1224,7 +1275,8 @@ function MyEngine:CreateWindow(Config)
                 end
 
                 local DB = Instance.new("TextButton")
-                DB.Size = UDim2.new(1, 0, 1, 0); DB.BackgroundTransparency = 1
+                -- [FIX] 高さを44px固定に。1,0だとF展開時にOCを覆いクリックをブロックしていた
+                DB.Size = UDim2.new(1, 0, 0, 44); DB.BackgroundTransparency = 1
                 DB.Text = getSelectedText()
                 DB.TextColor3 = Color3.fromRGB(235, 235, 245); DB.TextSize = 15
                 DB.Font = Enum.Font.SourceSans; DB.TextXAlignment = Enum.TextXAlignment.Left
@@ -1250,6 +1302,8 @@ function MyEngine:CreateWindow(Config)
 
                 local op = false
                 local optionBtns = {}
+                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                ForwardScroll(DB, scrollTarget)
 
                 local function UpdateDisplay()
                     DB.Text = getSelectedText()
@@ -1290,6 +1344,8 @@ function MyEngine:CreateWindow(Config)
                     OBBtn.MouseLeave:Connect(function()
                         if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end
                     end)
+                    -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                    ForwardScroll(OBBtn, scrollTarget)
                     OBBtn.MouseButton1Click:Connect(function()
                         if selected[opt] then
                             selected[opt] = nil
@@ -1422,6 +1478,8 @@ function MyEngine:CreateWindow(Config)
                 KB.MouseLeave:Connect(function()
                     if not listening then TW(KB, {BackgroundColor3 = Color3.fromRGB(26, 26, 36)}, 0.1) end
                 end)
+                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                ForwardScroll(KB, scrollTarget)
                 local Elem = {}
                 function Elem:Set(kc)
                     curKey = kc
@@ -1621,6 +1679,8 @@ function MyEngine:CreateWindow(Config)
                 end)
 
                 local PANEL_H = 148
+                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                ForwardScroll(TogBtn, scrollTarget)
                 TogBtn.MouseButton1Click:Connect(function()
                     opened = not opened; CPanel.Visible = opened; TogBtn.Text = opened and "▴" or "▾"
                     TW(F, {Size = UDim2.new(1, 0, 0, opened and 44 + PANEL_H + 6 or 44)}, 0.2)
@@ -1723,6 +1783,8 @@ function MyEngine:CreateWindow(Config)
                     TW(HeaderBtn, {TextColor3 = Color3.fromRGB(110, 160, 235)}, 0.1)
                     TW(AccLine, {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.1)
                 end)
+                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                ForwardScroll(HeaderBtn, scrollTarget)
                 HeaderBtn.MouseButton1Click:Connect(function()
                     expanded = not expanded
                     if expanded then
@@ -1740,7 +1802,8 @@ function MyEngine:CreateWindow(Config)
                     end
                 end)
 
-                return buildCreators(Inner)
+                -- [FIX] scrollTarget を内側の buildCreators へ伝播させる
+                return buildCreators(Inner, scrollTarget)
             end
 
             -- ================================================================
@@ -1988,16 +2051,19 @@ function MyEngine:CreateWindow(Config)
                     hitBtn.MouseLeave:Connect(function()
                         if not selectedTable[plr.Name] then TW(c, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.1) end
                     end)
+                    -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                    ForwardScroll(hitBtn, scrollTarget)
                 end
 
                 for _, p in pairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer or Data.ShowSelf then BuildCard(p) end
                 end
 
-                Players.PlayerAdded:Connect(function(p)
+                -- [FIX] 接続を保持し、F破棄時に切断してメモリリークを防止
+                local _addedConn = Players.PlayerAdded:Connect(function(p)
                     if p ~= LocalPlayer or Data.ShowSelf then BuildCard(p) end
                 end)
-                Players.PlayerRemoving:Connect(function(p)
+                local _removingConn = Players.PlayerRemoving:Connect(function(p)
                     selectedTable[p.Name] = nil
                     MyEngine.KillList[p.UserId] = nil
                     MyEngine.Blacklist[p.UserId] = nil
@@ -2007,6 +2073,9 @@ function MyEngine:CreateWindow(Config)
                         task.delay(0.18, function() pcall(function() c:Destroy() end) end)
                     end
                     UpdateCountLbl()
+                end)
+                F.Destroying:Connect(function()
+                    _addedConn:Disconnect(); _removingConn:Disconnect()
                 end)
 
                 local Elem = {}
@@ -2353,7 +2422,7 @@ end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v4.1 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
+print("[af_hub] v4.3 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
 print("[af_hub] ─── V4.0 新機能 ───────────────────────────────────────")
 print("[af_hub] [FIX] CreateLabel :Set()/:Get() が機能しないバグ修正済み")
 print("[af_hub] [FIX] CreateColorPicker S/Vグラデーション更新バグ修正済み")
