@@ -1,19 +1,11 @@
--- af_hub GUI ENGINE - ULTIMATE V4.0
+-- af_hub GUI ENGINE - ULTIMATE V4.1
 -- Rayfield互換 / 完全日本語 / 一人称視点対応
--- V4.0 CHANGELOG:
---   [FIX] CreateLabel :Set()/:Get() が機能しないバグを修正
---   [FIX] CreateSection / CreateParagraph / CreateButton 戻り値なしバグ修正
---   [FIX] CreateColorPicker S/Vスライダーグラデーション更新バグ修正
---   [NEW] CreateMultiDropdown - チェックボックス式複数選択ドロップダウン
---   [NEW] CreateProgressBar  - 読み取り専用プログレスバー
---   [NEW] CreateDivider      - 区切り線
---   [NEW] Window:Dialog()    - モーダルダイアログ
---   [NEW] Window:Destroy()   - ウィンドウ破棄
---   [NEW] Tab:Select()       - プログラムからタブ切替
---   [NEW] MyEngine:SaveConfig() / LoadConfig() - 設定保存/読込
---   [NEW] MyEngine:Destroy() - 全GUI破棄
---   [NEW] Notify Type フィールド（Success/Error/Warning/Info）対応
---   [NEW] CreateInput エイリアス (CreateTextInput の別名)
+-- V4.1 BUGFIX CHANGELOG:
+--   [FIX] CreateDropdown / CreateMultiDropdown: OCがF外側に配置されUIバグを起こす問題を修正 (UDim2 1,3 → 0,44 + ClipsDescendants)
+--   [FIX] CreateColorPicker: CPanelがF外側に配置されUIバグを起こす問題を修正 (同上)
+--   [FIX] CreateColorPicker: Elem:Set() で内部curValが同期されないバグを修正 (SetH/S/V追加)
+--   [FIX] CreateSlider: UserInputService接続がF破棄後も残るメモリリークを修正 (Destroying切断)
+--   [FIX] CreateTab: アクティブタブのアクセントバーが常に非表示になるバグを修正 (Transparency 1→0)
 
 local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
@@ -770,7 +762,7 @@ function MyEngine:CreateWindow(Config)
                 t.A.BackgroundTransparency = 1; t.C.Visible = false
             end
             TW(TBtn, {BackgroundColor3 = TAB_ACTIVE_BG, TextColor3 = TAB_ACTIVE_TEXT}, 0.14)
-            Acc.BackgroundTransparency = 1
+            Acc.BackgroundTransparency = 0 -- [FIX] アクティブタブのアクセントバーを表示
             TC.Visible = true
         end
 
@@ -779,7 +771,7 @@ function MyEngine:CreateWindow(Config)
         if #Window._Tabs == 0 then
             TBtn.BackgroundColor3 = TAB_ACTIVE_BG
             TBtn.TextColor3 = TAB_ACTIVE_TEXT
-            Acc.BackgroundTransparency = 1; TC.Visible = true
+            Acc.BackgroundTransparency = 0; TC.Visible = true -- [FIX] 最初のタブのアクセントバーを表示
         end
 
         table.insert(Window._Tabs, Tab)
@@ -1053,12 +1045,13 @@ function MyEngine:CreateWindow(Config)
                     TW(Fil, {BackgroundColor3 = Color3.fromRGB(65, 155, 255)}, 0.1)
                     TW(FilStroke, {Color = Color3.fromRGB(90, 185, 255)}, 0.1)
                 end)
-                UserInputService.InputChanged:Connect(function(i)
+                -- [FIX] コネクションを保持し、F破棄時に切断してメモリリークを防止
+                local _changedConn = UserInputService.InputChanged:Connect(function(i)
                     if dr and i.UserInputType == Enum.UserInputType.MouseMovement then
                         Upd(Min + (Max - Min) * MouseRatio())
                     end
                 end)
-                UserInputService.InputEnded:Connect(function(i)
+                local _endedConn = UserInputService.InputEnded:Connect(function(i)
                     if i.UserInputType == Enum.UserInputType.MouseButton1 and dr then
                         dr = false
                         TW(Fil, {BackgroundColor3 = Color3.fromRGB(50, 138, 220)}, 0.15)
@@ -1066,6 +1059,9 @@ function MyEngine:CreateWindow(Config)
                         if Data.Callback then pcall(Data.Callback, cur) end
                         AddLog((Data.Name or "スライダー") .. " = " .. tostring(cur), "Action")
                     end
+                end)
+                F.Destroying:Connect(function()
+                    _changedConn:Disconnect(); _endedConn:Disconnect()
                 end)
                 Hit.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(25, 25, 30)}, 0.1) end)
                 Hit.MouseLeave:Connect(function()
@@ -1148,8 +1144,10 @@ function MyEngine:CreateWindow(Config)
                     Text = "▾", TextColor3 = Color3.fromRGB(95, 115, 145), TextSize = 16,
                     Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center,
                 })
+                -- [FIX] OC を F の内側 (Y=44) に配置し、ClipsDescendants で制御
+                F.ClipsDescendants = true
                 local OC = Instance.new("Frame")
-                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 1, 3)
+                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 0, 44)
                 OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
                 OC.Visible = false; OC.ZIndex = 10; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
                 Instance.new("UIListLayout").Parent = OC
@@ -1238,8 +1236,10 @@ function MyEngine:CreateWindow(Config)
                     Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center,
                 })
 
+                -- [FIX] OC を F の内側 (Y=44) に配置し、ClipsDescendants で制御
+                F.ClipsDescendants = true
                 local OC = Instance.new("ScrollingFrame")
-                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 1, 3)
+                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 0, 44)
                 OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
                 OC.ScrollBarThickness = 2; OC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
                 OC.Visible = false; OC.ZIndex = 10; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
@@ -1499,8 +1499,10 @@ function MyEngine:CreateWindow(Config)
                 TogBtn.Text = "▾"; TogBtn.TextColor3 = Color3.fromRGB(155, 160, 185)
                 TogBtn.TextSize = 14; TogBtn.Font = Enum.Font.GothamBold
                 TogBtn.AutoButtonColor = false; TogBtn.Parent = F; CC(TogBtn, 6)
+                -- [FIX] CPanel を F の内側 (Y=44) に配置し、ClipsDescendants で制御
+                F.ClipsDescendants = true
                 local CPanel = Instance.new("Frame")
-                CPanel.Size = UDim2.new(1, 0, 0, 0); CPanel.Position = UDim2.new(0, 0, 1, 4)
+                CPanel.Size = UDim2.new(1, 0, 0, 0); CPanel.Position = UDim2.new(0, 0, 0, 44)
                 CPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 19); CPanel.BorderSizePixel = 0
                 CPanel.Visible = false; CPanel.ZIndex = 5; CPanel.Parent = F; CC(CPanel, 7)
                 CS(CPanel, Color3.fromRGB(34, 34, 48), 1)
@@ -1553,14 +1555,21 @@ function MyEngine:CreateWindow(Config)
                         end
                     end)
                     ValLbl.Text = tostring(math.floor(initVal * 100)) .. "%"
-                    return function() return curVal end, ValLbl, Knob, TrkBG2, Grad2
+                    local function GetVal() return curVal end
+                    -- [FIX] Elem:Set() から内部 curVal を同期するためのセッター
+                    local function SetVal(v)
+                        curVal = math.clamp(v, 0, 1)
+                        Knob.Position = UDim2.new(curVal, 0, 0.5, 0)
+                        ValLbl.Text = tostring(math.floor(curVal * 100)) .. "%"
+                    end
+                    return GetVal, SetVal, ValLbl, Knob, TrkBG2, Grad2
                 end
 
-                local GetH, HValLbl, HKnob, HTrkBG, HGrad = MkHsvSlider("H", 66, H,
+                local GetH, SetH, HValLbl, HKnob, HTrkBG, HGrad = MkHsvSlider("H", 66, H,
                     Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 0, 0))
-                local GetS, SValLbl, SKnob, STrkBG, SGrad = MkHsvSlider("S", 92, S,
+                local GetS, SetS, SValLbl, SKnob, STrkBG, SGrad = MkHsvSlider("S", 92, S,
                     Color3.fromRGB(180, 180, 180), Color3.fromRGB(255, 85, 85))
-                local GetV, VValLbl, VKnob, VTrkBG, VGrad = MkHsvSlider("V", 118, V,
+                local GetV, SetV, VValLbl, VKnob, VTrkBG, VGrad = MkHsvSlider("V", 118, V,
                     Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 255, 255))
 
                 -- [FIX] H スライダーをレインボーグラデーションに
@@ -1620,13 +1629,9 @@ function MyEngine:CreateWindow(Config)
 
                 local Elem = {}
                 function Elem:Set(color3)
+                    -- [FIX] SetH/S/V で内部 curVal を正しく同期
                     curColor = color3; H, S, V = color3:ToHSV()
-                    HKnob.Position = UDim2.new(H, 0, 0.5, 0)
-                    SKnob.Position = UDim2.new(S, 0, 0.5, 0)
-                    VKnob.Position = UDim2.new(V, 0, 0.5, 0)
-                    HValLbl.Text = tostring(math.floor(H * 100)) .. "%"
-                    SValLbl.Text = tostring(math.floor(S * 100)) .. "%"
-                    VValLbl.Text = tostring(math.floor(V * 100)) .. "%"
+                    SetH(H); SetS(S); SetV(V)
                     Preview.BackgroundColor3 = curColor; BigPrev.BackgroundColor3 = curColor
                     HexLbl.Text = ToHex(curColor)
                     if Data.Callback then pcall(Data.Callback, curColor) end
@@ -2348,7 +2353,7 @@ end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v4.0 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
+print("[af_hub] v4.1 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
 print("[af_hub] ─── V4.0 新機能 ───────────────────────────────────────")
 print("[af_hub] [FIX] CreateLabel :Set()/:Get() が機能しないバグ修正済み")
 print("[af_hub] [FIX] CreateColorPicker S/Vグラデーション更新バグ修正済み")
