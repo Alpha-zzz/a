@@ -1,10 +1,11 @@
--- af_hub GUI ENGINE - ULTIMATE V4.4
+-- af_hub GUI ENGINE - ULTIMATE V4.5
 -- Rayfield互換 / 完全日本語 / 一人称視点対応
--- V4.4 BUGFIX CHANGELOG:
---   [FIX] ドロップダウン展開中のスクロール不可バグ（根本原因）:
---         CreateDropdown の OC が Frame だったためスクロール不可 → ScrollingFrame + CanvasSize追跡に変更
---         オプションボタンのホイール転送先が TC（タブ全体）だった → OC（リスト自身）に修正
---         CreateMultiDropdown も同様に OBBtn の ForwardScroll 転送先を OC に修正
+-- V4.5 BUGFIX CHANGELOG:
+--   [FIX] ドロップダウンスクロール完全修正 (Rayfield方式に完全移行):
+--         旧: F をリサイズして ClipsDescendants=true で OC を押し込む
+--             → Tween中にTCのCanvasSize追跡が壊れ / ClipsDescendants がOCを完全に隠していた
+--         新: F は常に44px固定 / ClipsDescendants=false / OC は ZIndex=100 でFの下にフロート
+--             CanvasSize = オプション数×34px を開くタイミングで直接セット (シグナル待ちバグ排除)
 --   [FIX] CreateDropdown / CreateMultiDropdown: DBボタンがSize 1,0で展開時にOCを覆いクリックをブロックするバグ修正 (→固定44px)
 --   [FIX] MakeDraggable: UserInputService.InputChangedが切断されないメモリリーク修正
 --   [FIX] CreateWindow: トグルキーInputBegan接続がSG破棄後も残るメモリリーク修正
@@ -1178,71 +1179,81 @@ function MyEngine:CreateWindow(Config)
                 local F = Instance.new("Frame")
                 F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                -- ★ Rayfield方式: Fは常に44px固定、ClipsDescendants=falseでOCが下にフロート
+                F.ClipsDescendants = false
+
                 local DB = Instance.new("TextButton")
-                -- [FIX] 高さを44px固定に。1,0だとF展開時にOCを覆いクリックをブロックしていた
-                DB.Size = UDim2.new(1, 0, 0, 44); DB.BackgroundTransparency = 1
+                DB.Size = UDim2.new(1, 0, 1, 0); DB.BackgroundTransparency = 1
                 DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. (Data.CurrentOption or "未選択")
                 DB.TextColor3 = Color3.fromRGB(235, 235, 245); DB.TextSize = 17
                 DB.Font = Enum.Font.SourceSans; DB.TextXAlignment = Enum.TextXAlignment.Left; DB.Parent = F
                 DB.TextTruncate = Enum.TextTruncate.AtEnd
+                -- DBホイール → タブをスクロール
+                ForwardScroll(DB, scrollTarget)
+
                 local Arr = MkLabel(F, {
                     Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(1, -28, 0, 0),
                     Text = "▾", TextColor3 = Color3.fromRGB(95, 115, 145), TextSize = 16,
                     Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center,
                 })
-                -- [FIX] OC を ScrollingFrame に変更（Frameでは中身をスクロールできなかった）
-                F.ClipsDescendants = true
+
+                -- ★ OCはFの子だがFより下にはみ出す (ZIndex=100で他要素の上に浮く)
+                -- ★ CanvasSize = オプション数×34px を直接セット (シグナル待ち不要で確実)
                 local OC = Instance.new("ScrollingFrame")
-                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 0, 44)
+                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 0, 46)
                 OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
                 OC.ScrollBarThickness = 3; OC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
                 OC.ScrollingDirection = Enum.ScrollingDirection.Y
-                OC.Visible = false; OC.ZIndex = 10; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
-                local OCL = Instance.new("UIListLayout"); OCL.Parent = OC
-                -- [FIX] オプション追加のたびにCanvasSizeを更新
-                OCL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    OC.CanvasSize = UDim2.new(0, 0, 0, OCL.AbsoluteContentSize.Y)
-                end)
+                OC.CanvasSize = UDim2.new(0, 0, 0, 0)
+                OC.Visible = false; OC.ZIndex = 100; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
+                local OCL = Instance.new("UIListLayout"); OCL.SortOrder = Enum.SortOrder.LayoutOrder; OCL.Parent = OC
+
                 local op = false
-                -- [FIX] DBホイール → タブスクロール（展開前は親TCをスクロール）
-                ForwardScroll(DB, scrollTarget)
+                local optionCount = 0
+
+                local function CloseDD()
+                    op = false; OC.Visible = false; Arr.Text = "▾"
+                end
+
                 DB.MouseButton1Click:Connect(function()
-                    op = not op; OC.Visible = op
                     if op then
-                        local h = math.min(#(Data.Options or {}) * 34, 185)
-                        TW(OC, {Size = UDim2.new(1, 0, 0, h)}, 0.18)
-                        TW(F, {Size = UDim2.new(1, 0, 0, 44 + h + 4)}, 0.18); Arr.Text = "▴"
+                        CloseDD()
                     else
-                        TW(OC, {Size = UDim2.new(1, 0, 0, 0)}, 0.18)
-                        TW(F, {Size = UDim2.new(1, 0, 0, 44)}, 0.18); Arr.Text = "▾"
+                        op = true
+                        local h = math.min(optionCount * 34, 185)
+                        -- ★ CanvasSize を開く直前に確実にセット
+                        OC.CanvasSize = UDim2.new(0, 0, 0, optionCount * 34)
+                        OC.CanvasPosition = Vector2.zero
+                        OC.Size = UDim2.new(1, 0, 0, h)
+                        OC.Visible = true; Arr.Text = "▴"
                     end
                 end)
+
                 local function AddOption(opt)
+                    optionCount = optionCount + 1
                     local OB = Instance.new("TextButton")
                     OB.Size = UDim2.new(1, 0, 0, 34); OB.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
                     OB.BorderSizePixel = 0; OB.Text = "  " .. opt
                     OB.TextColor3 = Color3.fromRGB(195, 200, 215); OB.TextSize = 16
                     OB.Font = Enum.Font.SourceSans; OB.TextXAlignment = Enum.TextXAlignment.Left
-                    OB.AutoButtonColor = false; OB.ZIndex = 11; OB.Parent = OC
+                    OB.AutoButtonColor = false; OB.ZIndex = 101; OB.Parent = OC
                     OB.MouseEnter:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(28, 28, 36)}, 0.08) end)
                     OB.MouseLeave:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end)
-                    -- [FIX] オプションボタンのホイール → OC自身をスクロール（TCではなくOC）
+                    -- ★ OB内ホイール → OC自身をスクロール
                     ForwardScroll(OB, OC)
                     OB.MouseButton1Click:Connect(function()
                         DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. opt
-                        op = false; OC.Visible = false; Arr.Text = "▾"
-                        TW(OC, {Size = UDim2.new(1, 0, 0, 0)}, 0.18)
-                        TW(F, {Size = UDim2.new(1, 0, 0, 44)}, 0.18)
+                        CloseDD()
                         if Data.Callback then pcall(Data.Callback, opt) end
                         MyEngine.Flags[Data.Flag or Data.Name or ""] = opt
                     end)
                 end
                 for _, opt in pairs(Data.Options or {}) do AddOption(opt) end
+
                 local Elem = {}
                 function Elem:Set(opt)
                     DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. opt
-                    op = false; OC.Visible = false; Arr.Text = "▾"
-                    TW(OC, {Size = UDim2.new(1, 0, 0, 0)}, 0.18); TW(F, {Size = UDim2.new(1, 0, 0, 44)}, 0.18)
+                    CloseDD()
                     if Data.Callback then pcall(Data.Callback, opt) end
                     MyEngine.Flags[Data.Flag or Data.Name or ""] = opt
                 end
@@ -1250,7 +1261,7 @@ function MyEngine:CreateWindow(Config)
                     for _, c in pairs(OC:GetChildren()) do
                         if c:IsA("TextButton") then c:Destroy() end
                     end
-                    Data.Options = newOptions
+                    optionCount = 0; Data.Options = newOptions
                     for _, opt in pairs(newOptions or {}) do AddOption(opt) end
                 end
                 function Elem:Get()
@@ -1263,14 +1274,14 @@ function MyEngine:CreateWindow(Config)
             function Creators:CreateMultiDropdown(Data)
                 -- Data: {Name, Options, CurrentOptions, Callback, Flag, MaxSelection}
                 local selected = {}
-                for _, v in pairs(Data.CurrentOptions or {}) do
-                    selected[v] = true
-                end
+                for _, v in pairs(Data.CurrentOptions or {}) do selected[v] = true end
                 local maxSel = Data.MaxSelection or math.huge
 
                 local F = Instance.new("Frame")
                 F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
+                -- ★ Rayfield方式: Fは常に44px固定、ClipsDescendants=falseでOCが下にフロート
+                F.ClipsDescendants = false
 
                 local function getSelectedText()
                     local keys = {}
@@ -1280,12 +1291,12 @@ function MyEngine:CreateWindow(Config)
                 end
 
                 local DB = Instance.new("TextButton")
-                -- [FIX] 高さを44px固定に。1,0だとF展開時にOCを覆いクリックをブロックしていた
-                DB.Size = UDim2.new(1, 0, 0, 44); DB.BackgroundTransparency = 1
+                DB.Size = UDim2.new(1, 0, 1, 0); DB.BackgroundTransparency = 1
                 DB.Text = getSelectedText()
                 DB.TextColor3 = Color3.fromRGB(235, 235, 245); DB.TextSize = 15
                 DB.Font = Enum.Font.SourceSans; DB.TextXAlignment = Enum.TextXAlignment.Left
                 DB.TextTruncate = Enum.TextTruncate.AtEnd; DB.Parent = F
+                ForwardScroll(DB, scrollTarget)
 
                 local Arr = MkLabel(F, {
                     Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(1, -28, 0, 0),
@@ -1293,22 +1304,23 @@ function MyEngine:CreateWindow(Config)
                     Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center,
                 })
 
-                -- [FIX] OC を F の内側 (Y=44) に配置し、ClipsDescendants で制御
-                F.ClipsDescendants = true
+                -- ★ OCはFの子だがFより下にはみ出す (ZIndex=100で他要素の上に浮く)
                 local OC = Instance.new("ScrollingFrame")
-                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 0, 44)
+                OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 0, 46)
                 OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
-                OC.ScrollBarThickness = 2; OC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
-                OC.Visible = false; OC.ZIndex = 10; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
-                local OCL = Instance.new("UIListLayout"); OCL.Parent = OC
-                OCL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    OC.CanvasSize = UDim2.new(0, 0, 0, OCL.AbsoluteContentSize.Y)
-                end)
+                OC.ScrollBarThickness = 3; OC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+                OC.ScrollingDirection = Enum.ScrollingDirection.Y
+                OC.CanvasSize = UDim2.new(0, 0, 0, 0)
+                OC.Visible = false; OC.ZIndex = 100; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
+                local OCL = Instance.new("UIListLayout"); OCL.SortOrder = Enum.SortOrder.LayoutOrder; OCL.Parent = OC
 
                 local op = false
                 local optionBtns = {}
-                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
-                ForwardScroll(DB, scrollTarget)
+                local optionCount = 0
+
+                local function CloseDD()
+                    op = false; OC.Visible = false; Arr.Text = "▾"
+                end
 
                 local function UpdateDisplay()
                     DB.Text = getSelectedText()
@@ -1317,23 +1329,22 @@ function MyEngine:CreateWindow(Config)
                 end
 
                 local function MakeOption(opt)
+                    optionCount = optionCount + 1
                     local ORow = Instance.new("Frame")
-                    ORow.Size = UDim2.new(1, 0, 0, 34); ORow.BorderSizePixel = 0; ORow.ZIndex = 11
+                    ORow.Size = UDim2.new(1, 0, 0, 34); ORow.BorderSizePixel = 0; ORow.ZIndex = 101
                     ORow.BackgroundColor3 = selected[opt] and Color3.fromRGB(26, 42, 70) or Color3.fromRGB(20, 20, 26)
                     ORow.Parent = OC
 
                     local CB = Instance.new("Frame")
                     CB.Size = UDim2.new(0, 16, 0, 16); CB.Position = UDim2.new(0, 10, 0.5, -8)
                     CB.BackgroundColor3 = selected[opt] and Color3.fromRGB(42, 138, 242) or Color3.fromRGB(32, 32, 44)
-                    CB.BorderSizePixel = 0; CB.ZIndex = 12; CB.Parent = ORow
-                    CC(CB, 4)
+                    CB.BorderSizePixel = 0; CB.ZIndex = 102; CB.Parent = ORow; CC(CB, 4)
 
                     local Check = MkLabel(CB, {
-                        Size = UDim2.new(1, 0, 1, 0),
-                        Text = selected[opt] and "✓" or "",
+                        Size = UDim2.new(1, 0, 1, 0), Text = selected[opt] and "✓" or "",
                         TextSize = 11, Font = Enum.Font.GothamBold,
                         TextColor3 = Color3.fromRGB(255, 255, 255),
-                        TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 13,
+                        TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 103,
                     })
 
                     local OBBtn = Instance.new("TextButton")
@@ -1341,7 +1352,7 @@ function MyEngine:CreateWindow(Config)
                     OBBtn.BackgroundTransparency = 1; OBBtn.Text = opt
                     OBBtn.TextColor3 = Color3.fromRGB(195, 200, 215); OBBtn.TextSize = 15
                     OBBtn.Font = Enum.Font.SourceSans; OBBtn.TextXAlignment = Enum.TextXAlignment.Left
-                    OBBtn.AutoButtonColor = false; OBBtn.ZIndex = 12; OBBtn.Parent = ORow
+                    OBBtn.AutoButtonColor = false; OBBtn.ZIndex = 102; OBBtn.Parent = ORow
 
                     OBBtn.MouseEnter:Connect(function()
                         if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(26, 26, 34)}, 0.08) end
@@ -1349,7 +1360,7 @@ function MyEngine:CreateWindow(Config)
                     OBBtn.MouseLeave:Connect(function()
                         if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end
                     end)
-                    -- [FIX] オプションボタンのホイール → OC自身をスクロール（TCではなくOC）
+                    -- ★ OBホイール → OC自身をスクロール
                     ForwardScroll(OBBtn, OC)
                     OBBtn.MouseButton1Click:Connect(function()
                         if selected[opt] then
@@ -1358,8 +1369,7 @@ function MyEngine:CreateWindow(Config)
                             TW(CB, {BackgroundColor3 = Color3.fromRGB(32, 32, 44)}, 0.12)
                             Check.Text = ""
                         else
-                            local count = 0
-                            for _ in pairs(selected) do count = count + 1 end
+                            local count = 0; for _ in pairs(selected) do count = count + 1 end
                             if count >= maxSel then
                                 TW(ORow, {BackgroundColor3 = Color3.fromRGB(60, 25, 25)}, 0.08)
                                 task.delay(0.2, function() TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.15) end)
@@ -1372,21 +1382,22 @@ function MyEngine:CreateWindow(Config)
                         end
                         UpdateDisplay()
                     end)
-
                     optionBtns[opt] = {Frame = ORow, Check = Check, CB = CB}
                 end
 
                 for _, opt in pairs(Data.Options or {}) do MakeOption(opt) end
 
                 DB.MouseButton1Click:Connect(function()
-                    op = not op; OC.Visible = op
                     if op then
-                        local h = math.min(#(Data.Options or {}) * 34, 185)
-                        TW(OC, {Size = UDim2.new(1, 0, 0, h)}, 0.18)
-                        TW(F, {Size = UDim2.new(1, 0, 0, 44 + h + 4)}, 0.18); Arr.Text = "▴"
+                        CloseDD()
                     else
-                        TW(OC, {Size = UDim2.new(1, 0, 0, 0)}, 0.18)
-                        TW(F, {Size = UDim2.new(1, 0, 0, 44)}, 0.18); Arr.Text = "▾"
+                        op = true
+                        local h = math.min(optionCount * 34, 185)
+                        -- ★ CanvasSize を開く直前に確実にセット
+                        OC.CanvasSize = UDim2.new(0, 0, 0, optionCount * 34)
+                        OC.CanvasPosition = Vector2.zero
+                        OC.Size = UDim2.new(1, 0, 0, h)
+                        OC.Visible = true; Arr.Text = "▴"
                     end
                 end)
 
@@ -1408,15 +1419,13 @@ function MyEngine:CreateWindow(Config)
                     UpdateDisplay()
                 end
                 function Elem:Get()
-                    local t = {}
-                    for k in pairs(selected) do table.insert(t, k) end
-                    return t
+                    local t = {}; for k in pairs(selected) do table.insert(t, k) end; return t
                 end
                 function Elem:Refresh(newOptions)
                     for _, c in pairs(OC:GetChildren()) do
                         if c:IsA("Frame") then c:Destroy() end
                     end
-                    optionBtns = {}; selected = {}; Data.Options = newOptions
+                    optionBtns = {}; optionCount = 0; selected = {}; Data.Options = newOptions
                     for _, opt in pairs(newOptions or {}) do MakeOption(opt) end
                     UpdateDisplay()
                 end
@@ -2427,7 +2436,7 @@ end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v4.4 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
+print("[af_hub] v4.5 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
 print("[af_hub] ─── V4.0 新機能 ───────────────────────────────────────")
 print("[af_hub] [FIX] CreateLabel :Set()/:Get() が機能しないバグ修正済み")
 print("[af_hub] [FIX] CreateColorPicker S/Vグラデーション更新バグ修正済み")
