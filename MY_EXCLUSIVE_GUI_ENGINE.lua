@@ -1,11 +1,10 @@
--- af_hub GUI ENGINE - ULTIMATE V4.3
+-- af_hub GUI ENGINE - ULTIMATE V4.4
 -- Rayfield互換 / 完全日本語 / 一人称視点対応
--- V4.3 BUGFIX CHANGELOG:
---   [FIX] スクロール不可バグ: 全オーバーレイTextButtonがマウスホイールを横取りしていた問題を修正
---         (ForwardScrollヘルパーを追加し Toggle/Slider/Button/Dropdown/Keybind/ColorPicker/PlayerList すべてに適用)
---   [FIX] TC.ScrollingDirection を Y 専用に設定（デフォルトXYが干渉していた）
---   [FIX] TC UIPadding に PaddingLeft・PaddingBottom が欠落していた（要素が左端/下端で切れていた）
---   [FIX] CollapsibleSection内要素にも scrollTarget を伝播（ネストしたセクション内でも正しくスクロール転送）
+-- V4.4 BUGFIX CHANGELOG:
+--   [FIX] ドロップダウン展開中のスクロール不可バグ（根本原因）:
+--         CreateDropdown の OC が Frame だったためスクロール不可 → ScrollingFrame + CanvasSize追跡に変更
+--         オプションボタンのホイール転送先が TC（タブ全体）だった → OC（リスト自身）に修正
+--         CreateMultiDropdown も同様に OBBtn の ForwardScroll 転送先を OC に修正
 --   [FIX] CreateDropdown / CreateMultiDropdown: DBボタンがSize 1,0で展開時にOCを覆いクリックをブロックするバグ修正 (→固定44px)
 --   [FIX] MakeDraggable: UserInputService.InputChangedが切断されないメモリリーク修正
 --   [FIX] CreateWindow: トグルキーInputBegan接続がSG破棄後も残るメモリリーク修正
@@ -1191,15 +1190,21 @@ function MyEngine:CreateWindow(Config)
                     Text = "▾", TextColor3 = Color3.fromRGB(95, 115, 145), TextSize = 16,
                     Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center,
                 })
-                -- [FIX] OC を F の内側 (Y=44) に配置し、ClipsDescendants で制御
+                -- [FIX] OC を ScrollingFrame に変更（Frameでは中身をスクロールできなかった）
                 F.ClipsDescendants = true
-                local OC = Instance.new("Frame")
+                local OC = Instance.new("ScrollingFrame")
                 OC.Size = UDim2.new(1, 0, 0, 0); OC.Position = UDim2.new(0, 0, 0, 44)
                 OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
+                OC.ScrollBarThickness = 3; OC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+                OC.ScrollingDirection = Enum.ScrollingDirection.Y
                 OC.Visible = false; OC.ZIndex = 10; OC.Parent = F; CC(OC, 7); CS(OC, Color3.fromRGB(34, 34, 42), 1)
-                Instance.new("UIListLayout").Parent = OC
+                local OCL = Instance.new("UIListLayout"); OCL.Parent = OC
+                -- [FIX] オプション追加のたびにCanvasSizeを更新
+                OCL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                    OC.CanvasSize = UDim2.new(0, 0, 0, OCL.AbsoluteContentSize.Y)
+                end)
                 local op = false
-                -- [FIX] ホイールイベントを親ScrollingFrameへ転送
+                -- [FIX] DBホイール → タブスクロール（展開前は親TCをスクロール）
                 ForwardScroll(DB, scrollTarget)
                 DB.MouseButton1Click:Connect(function()
                     op = not op; OC.Visible = op
@@ -1221,8 +1226,8 @@ function MyEngine:CreateWindow(Config)
                     OB.AutoButtonColor = false; OB.ZIndex = 11; OB.Parent = OC
                     OB.MouseEnter:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(28, 28, 36)}, 0.08) end)
                     OB.MouseLeave:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end)
-                    -- [FIX] ホイールイベントを親ScrollingFrameへ転送
-                    ForwardScroll(OB, scrollTarget)
+                    -- [FIX] オプションボタンのホイール → OC自身をスクロール（TCではなくOC）
+                    ForwardScroll(OB, OC)
                     OB.MouseButton1Click:Connect(function()
                         DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. opt
                         op = false; OC.Visible = false; Arr.Text = "▾"
@@ -1344,8 +1349,8 @@ function MyEngine:CreateWindow(Config)
                     OBBtn.MouseLeave:Connect(function()
                         if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end
                     end)
-                    -- [FIX] ホイールイベントを親ScrollingFrameへ転送
-                    ForwardScroll(OBBtn, scrollTarget)
+                    -- [FIX] オプションボタンのホイール → OC自身をスクロール（TCではなくOC）
+                    ForwardScroll(OBBtn, OC)
                     OBBtn.MouseButton1Click:Connect(function()
                         if selected[opt] then
                             selected[opt] = nil
@@ -2422,7 +2427,7 @@ end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v4.3 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
+print("[af_hub] v4.4 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
 print("[af_hub] ─── V4.0 新機能 ───────────────────────────────────────")
 print("[af_hub] [FIX] CreateLabel :Set()/:Get() が機能しないバグ修正済み")
 print("[af_hub] [FIX] CreateColorPicker S/Vグラデーション更新バグ修正済み")
