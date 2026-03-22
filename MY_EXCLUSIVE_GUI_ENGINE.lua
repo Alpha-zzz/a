@@ -1,4 +1,4 @@
--- af_hub GUI ENGINE - ULTIMATE V4.6
+-- af_hub GUI ENGINE - ULTIMATE V5.0
 -- Rayfield互換 / 完全日本語 / 一人称視点対応
 -- V4.6 BUGFIX CHANGELOG (最終版):
 --   [FIX] Dropdown/MultiDropdown/ColorPicker 合体バグ完全修正:
@@ -158,236 +158,215 @@ local function AddLog(msg, t)
 end
 
 -- ================================================================
---  起動アニメーション V3 ULTRA
+--  粒子システム V1 — フローティングドット＋接続ライン
+-- ================================================================
+local function StartParticles(parentSG)
+    local PARTICLE_COUNT = 30
+    local CONNECT_DIST   = 155   -- px以内のドットを線で繋ぐ
+    local BASE_SPEED     = 38    -- px/秒 (基準速度)
+    local DOT_COLOR      = Color3.fromRGB(55, 165, 255)
+    local LINE_COLOR     = Color3.fromRGB(35, 115, 220)
+    local MAX_LINES      = 200
+
+    local PBG = Instance.new("Frame")
+    PBG.Name = "ParticleBG"
+    PBG.Size = UDim2.new(1, 0, 1, 0)
+    PBG.BackgroundTransparency = 1
+    PBG.BorderSizePixel = 0
+    PBG.ZIndex = 1
+    PBG.ClipsDescendants = true
+    PBG.Parent = parentSG
+
+    -- ライン用フレームプール
+    local linePool = {}
+    for i = 1, MAX_LINES do
+        local ln = Instance.new("Frame")
+        ln.BackgroundColor3 = LINE_COLOR
+        ln.BackgroundTransparency = 1
+        ln.BorderSizePixel = 0
+        ln.AnchorPoint = Vector2.new(0, 0.5)
+        ln.ZIndex = 1
+        ln.Visible = false
+        ln.Parent = PBG
+        linePool[i] = ln
+    end
+
+    -- ドット生成
+    local particles = {}
+    for i = 1, PARTICLE_COUNT do
+        local sz = math.random(2, 5)
+        local dot = Instance.new("Frame")
+        dot.Size = UDim2.fromOffset(sz, sz)
+        dot.AnchorPoint = Vector2.new(0.5, 0.5)
+        dot.BackgroundColor3 = DOT_COLOR
+        dot.BackgroundTransparency = 0.15 + math.random() * 0.45
+        dot.BorderSizePixel = 0
+        dot.ZIndex = 2
+        dot.Parent = PBG
+        CC(dot, 100)
+
+        local ang = math.random() * math.pi * 2
+        local spd = BASE_SPEED * (0.4 + math.random() * 1.2)
+        particles[i] = {
+            frame = dot,
+            x = math.random(20, 800),
+            y = math.random(20, 500),
+            vx = math.cos(ang) * spd,
+            vy = math.sin(ang) * spd,
+        }
+    end
+
+    local pConn = RunService.RenderStepped:Connect(function(dt)
+        if not PBG.Parent then return end
+        local W = PBG.AbsoluteSize.X
+        local H = PBG.AbsoluteSize.Y
+        if W < 10 or H < 10 then return end
+
+        -- ドット位置を更新（跳ね返り）
+        for _, p in ipairs(particles) do
+            p.x = p.x + p.vx * dt
+            p.y = p.y + p.vy * dt
+            if p.x < 0 then
+                p.x = 0; p.vx = math.abs(p.vx) + math.random() * 3
+            elseif p.x > W then
+                p.x = W; p.vx = -(math.abs(p.vx) + math.random() * 3)
+            end
+            if p.y < 0 then
+                p.y = 0; p.vy = math.abs(p.vy) + math.random() * 3
+            elseif p.y > H then
+                p.y = H; p.vy = -(math.abs(p.vy) + math.random() * 3)
+            end
+            p.frame.Position = UDim2.fromOffset(p.x, p.y)
+        end
+
+        -- 接続ライン描画
+        local lineIdx = 0
+        for i = 1, #particles - 1 do
+            for j = i + 1, #particles do
+                if lineIdx >= MAX_LINES then break end
+                local p1 = particles[i]; local p2 = particles[j]
+                local dx = p2.x - p1.x; local dy = p2.y - p1.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist < CONNECT_DIST then
+                    lineIdx = lineIdx + 1
+                    local ln = linePool[lineIdx]
+                    local alpha = (1 - dist / CONNECT_DIST) * 0.55
+                    ln.Position = UDim2.fromOffset(p1.x, p1.y)
+                    ln.Size     = UDim2.fromOffset(dist, 1)
+                    ln.Rotation = math.deg(math.atan2(dy, dx))
+                    ln.BackgroundTransparency = 1 - alpha
+                    ln.Visible = true
+                end
+            end
+            if lineIdx >= MAX_LINES then break end
+        end
+        -- 未使用ラインを非表示
+        for i = lineIdx + 1, MAX_LINES do
+            if linePool[i].Visible then linePool[i].Visible = false end
+        end
+    end)
+
+    PBG.Destroying:Connect(function() pConn:Disconnect() end)
+    return PBG
+end
+
+-- ================================================================
+--  起動アニメーション V5 — 線からウィンドウへ展開
 -- ================================================================
 local function PlayBoot(sg, onDone)
+    -- 薄い暗幕（完全に黒くしない）
     local Boot = Instance.new("Frame")
     Boot.Size = UDim2.new(1, 0, 1, 0)
-    Boot.BackgroundColor3 = Color3.fromRGB(2, 2, 5)
-    Boot.BorderSizePixel = 0; Boot.ZIndex = 200; Boot.Parent = sg
+    Boot.BackgroundColor3 = Color3.fromRGB(4, 4, 8)
+    Boot.BackgroundTransparency = 0.05
+    Boot.BorderSizePixel = 0
+    Boot.ZIndex = 200
+    Boot.Parent = sg
 
-    for i = 0, 20 do
-        local fh = Instance.new("Frame")
-        fh.BackgroundColor3 = Color3.fromRGB(14, 32, 62)
-        fh.BackgroundTransparency = 0.80; fh.BorderSizePixel = 0; fh.ZIndex = 201
-        fh.Size = UDim2.new(1, 0, 0, 1); fh.Position = UDim2.new(0, 0, i / 20, 0); fh.Parent = Boot
-        local fv = Instance.new("Frame")
-        fv.BackgroundColor3 = Color3.fromRGB(14, 32, 62)
-        fv.BackgroundTransparency = 0.80; fv.BorderSizePixel = 0; fv.ZIndex = 201
-        fv.Size = UDim2.new(0, 1, 1, 0); fv.Position = UDim2.new(i / 20, 0, 0, 0); fv.Parent = Boot
-    end
+    -- 粒子を起動画面でも流す
+    local bootParticles = StartParticles(Boot)
+    bootParticles.ZIndex = 201
 
-    local function MkScan(color, thick, glowH, speed)
-        local S = Instance.new("Frame")
-        S.Size = UDim2.new(1, 0, 0, thick); S.BackgroundColor3 = color
-        S.BackgroundTransparency = 0.12; S.BorderSizePixel = 0; S.ZIndex = 215; S.Parent = Boot
-        local SG2 = Instance.new("Frame")
-        SG2.Size = UDim2.new(1, 0, 0, glowH); SG2.BackgroundColor3 = color
-        SG2.BackgroundTransparency = 0.83; SG2.BorderSizePixel = 0; SG2.ZIndex = 214; SG2.Parent = Boot
-        task.spawn(function()
-            while S.Parent do
-                S.Position = UDim2.new(0, 0, 0, -thick); SG2.Position = UDim2.new(0, 0, 0, -glowH / 2)
-                TW(S, {Position = UDim2.new(0, 0, 1, thick)}, speed, Enum.EasingStyle.Linear)
-                TW(SG2, {Position = UDim2.new(0, 0, 1, glowH)}, speed, Enum.EasingStyle.Linear)
-                task.wait(speed + 0.06)
-            end
-        end)
-    end
-    MkScan(Color3.fromRGB(40, 155, 255), 2, 30, 0.95)
-    MkScan(Color3.fromRGB(110, 220, 255), 1, 14, 1.5)
+    -- 中央の「線」フレーム（これがウィンドウに化ける）
+    local Line = Instance.new("Frame")
+    Line.Size = UDim2.fromOffset(0, 2)
+    Line.AnchorPoint = Vector2.new(0.5, 0.5)
+    Line.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Line.BackgroundColor3 = Color3.fromRGB(50, 155, 255)
+    Line.BorderSizePixel = 0
+    Line.ZIndex = 220
+    Line.Parent = Boot
+    CC(Line, 100)
 
-    local function Bracket(corner, delay)
-        local sz = 38; local pad = 22
-        local f = Instance.new("Frame")
-        f.Size = UDim2.new(0, sz, 0, sz); f.BackgroundTransparency = 1; f.ZIndex = 218; f.Parent = Boot
-        if corner == "TL"     then f.Position = UDim2.new(0, pad, 0, pad)
-        elseif corner == "TR" then f.Position = UDim2.new(1, -pad - sz, 0, pad)
-        elseif corner == "BL" then f.Position = UDim2.new(0, pad, 1, -pad - sz)
-        else                       f.Position = UDim2.new(1, -pad - sz, 1, -pad - sz) end
-        local h = Instance.new("Frame")
-        h.Size = UDim2.new(0, 0, 0, 2); h.BackgroundColor3 = Color3.fromRGB(55, 185, 255)
-        h.BorderSizePixel = 0; h.ZIndex = 219; h.Parent = f
-        local v = Instance.new("Frame")
-        v.Size = UDim2.new(0, 2, 0, 0); v.BackgroundColor3 = Color3.fromRGB(55, 185, 255)
-        v.BorderSizePixel = 0; v.ZIndex = 219; v.Parent = f
-        if corner == "TR" then
-            h.AnchorPoint = Vector2.new(1, 0); h.Position = UDim2.new(1, 0, 0, 0); v.Position = UDim2.new(1, -2, 0, 0)
-        elseif corner == "BL" then
-            h.Position = UDim2.new(0, 0, 1, -2); v.AnchorPoint = Vector2.new(0, 1); v.Position = UDim2.new(0, 0, 1, 0)
-        elseif corner == "BR" then
-            h.AnchorPoint = Vector2.new(1, 0); h.Position = UDim2.new(1, 0, 1, -2)
-            v.AnchorPoint = Vector2.new(0, 1); v.Position = UDim2.new(1, -2, 1, 0)
-        end
-        task.spawn(function()
-            task.wait(delay)
-            TW(h, {Size = UDim2.new(1, 0, 0, 2)}, 0.22, Enum.EasingStyle.Quint)
-            TW(v, {Size = UDim2.new(0, 2, 1, 0)}, 0.22, Enum.EasingStyle.Quint)
-        end)
-    end
-    Bracket("TL", 0.08); Bracket("TR", 0.18); Bracket("BL", 0.28); Bracket("BR", 0.38)
-
-    local hexChars = "0123456789ABCDEF"
-    for _ = 1, 26 do
-        local xPos = math.random() * 0.91
-        local hl = MkLabel(Boot, {
-            Size = UDim2.new(0, 130, 0, 12), Position = UDim2.new(xPos, 0, -0.06, 0),
-            Text = "", TextColor3 = Color3.fromRGB(18, 55, 100), TextSize = 9,
-            Font = Enum.Font.Code, ZIndex = 202, TextXAlignment = Enum.TextXAlignment.Left,
-        })
-        task.spawn(function()
-            task.wait(math.random() * 1.8)
-            while hl.Parent do
-                hl.Position = UDim2.new(xPos, 0, -0.06, 0); hl.TextTransparency = 0
-                local fallT = 1.6 + math.random() * 1.4
-                TW(hl, {Position = UDim2.new(xPos, 0, 1.06, 0), TextTransparency = 0.5}, fallT, Enum.EasingStyle.Linear)
-                local elapsed = 0
-                while elapsed < fallT and hl.Parent do
-                    local s = ""
-                    for _ = 1, math.random(7, 16) do s = s .. hexChars:sub(math.random(1, 16), math.random(1, 16)) end
-                    hl.Text = s
-                    local w = 0.07 + math.random() * 0.09; task.wait(w); elapsed = elapsed + w
-                end
-                task.wait(math.random() * 0.6)
-            end
-        end)
-    end
-
-    local Panel = Instance.new("Frame")
-    Panel.Size = UDim2.new(0, 490, 0, 225); Panel.AnchorPoint = Vector2.new(0.5, 0.5)
-    Panel.Position = UDim2.new(0.5, 0, 0.75, 0); Panel.BackgroundColor3 = Color3.fromRGB(6, 6, 10)
-    Panel.BackgroundTransparency = 1; Panel.BorderSizePixel = 0; Panel.ZIndex = 220; Panel.Parent = Boot
-    CC(Panel, 8)
-    local PanelStroke = CS(Panel, Color3.fromRGB(32, 105, 205), 1.5)
-    local PanelGrad = Instance.new("UIGradient")
-    PanelGrad.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(13, 13, 20)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 5, 9)),
-    }
-    PanelGrad.Rotation = 135; PanelGrad.Parent = Panel
-
-    local TopLine = Instance.new("Frame")
-    TopLine.Size = UDim2.new(0, 0, 0, 2); TopLine.BackgroundColor3 = Color3.fromRGB(50, 170, 255)
-    TopLine.BorderSizePixel = 0; TopLine.ZIndex = 221; TopLine.Parent = Panel; CC(TopLine, 100)
-    local BotLine = Instance.new("Frame")
-    BotLine.Size = UDim2.new(0, 0, 0, 1); BotLine.Position = UDim2.new(0, 0, 1, -1)
-    BotLine.BackgroundColor3 = Color3.fromRGB(28, 95, 195)
-    BotLine.BorderSizePixel = 0; BotLine.ZIndex = 221; BotLine.Parent = Panel; CC(BotLine, 100)
-
-    local Logo = MkLabel(Panel, {
-        Size = UDim2.new(1, 0, 0, 56), Position = UDim2.new(0, 0, 0, 16),
-        Text = "af_hub", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 46,
-        Font = Enum.Font.GothamBold, TextTransparency = 1,
-        TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 222,
+    -- ロゴ（線の上に出現）
+    local Logo = MkLabel(Boot, {
+        Size = UDim2.fromOffset(340, 54),
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 0.5, -14),
+        Text = "af_hub",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 42,
+        Font = Enum.Font.GothamBold,
+        TextTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        ZIndex = 222,
     })
-    local Sub = MkLabel(Panel, {
-        Size = UDim2.new(1, 0, 0, 16), Position = UDim2.new(0, 0, 0, 77),
-        Text = "", TextColor3 = Color3.fromRGB(45, 145, 255), TextSize = 11,
-        Font = Enum.Font.SourceSansSemibold, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 222,
+    local Sub = MkLabel(Boot, {
+        Size = UDim2.fromOffset(340, 20),
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 14),
+        Text = "ULTIMATE V4.6  //  " .. LocalPlayer.Name,
+        TextColor3 = Color3.fromRGB(50, 155, 255),
+        TextSize = 12,
+        Font = Enum.Font.GothamSemibold,
+        TextTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        ZIndex = 222,
     })
-
-    local TrkBG = Instance.new("Frame")
-    TrkBG.Size = UDim2.new(1, -40, 0, 5); TrkBG.Position = UDim2.new(0, 20, 0, 112)
-    TrkBG.BackgroundColor3 = Color3.fromRGB(14, 14, 22); TrkBG.BorderSizePixel = 0
-    TrkBG.ZIndex = 222; TrkBG.Parent = Panel; CC(TrkBG, 100); CS(TrkBG, Color3.fromRGB(28, 55, 115), 1)
-    local Fill = Instance.new("Frame")
-    Fill.Size = UDim2.new(0, 0, 1, 0); Fill.BackgroundColor3 = Color3.fromRGB(45, 145, 255)
-    Fill.BorderSizePixel = 0; Fill.ZIndex = 223; Fill.Parent = TrkBG; CC(Fill, 100)
-    local Glow = Instance.new("Frame")
-    Glow.Size = UDim2.new(0, 0, 0, 18); Glow.Position = UDim2.new(0, 0, 0.5, -9)
-    Glow.BackgroundColor3 = Color3.fromRGB(70, 175, 255); Glow.BackgroundTransparency = 0.76
-    Glow.BorderSizePixel = 0; Glow.ZIndex = 221; Glow.Parent = TrkBG; CC(Glow, 100)
-    local Chip = Instance.new("Frame")
-    Chip.Size = UDim2.new(0, 7, 0, 7); Chip.AnchorPoint = Vector2.new(0.5, 0.5)
-    Chip.Position = UDim2.new(1, 0, 0.5, 0); Chip.BackgroundColor3 = Color3.fromRGB(210, 240, 255)
-    Chip.BackgroundTransparency = 0.1; Chip.BorderSizePixel = 0; Chip.ZIndex = 225; Chip.Parent = Fill; CC(Chip, 100)
-
-    local PctLbl = MkLabel(Panel, {
-        Size = UDim2.new(1, 0, 0, 16), Position = UDim2.new(0, 0, 0, 124),
-        Text = "0%", TextColor3 = Color3.fromRGB(55, 95, 148), TextSize = 11,
-        Font = Enum.Font.SourceSansSemibold, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 222,
-    })
-    local StatusLbl = MkLabel(Panel, {
-        Size = UDim2.new(1, -24, 0, 16), Position = UDim2.new(0, 12, 0, 148),
-        Text = "", TextColor3 = Color3.fromRGB(38, 72, 112), TextSize = 11,
-        Font = Enum.Font.Code, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 222,
-    })
-    MkLabel(Panel, {
-        Size = UDim2.new(1, -16, 0, 14), Position = UDim2.new(0, 8, 1, -18),
-        Text = "v4.0  //  " .. LocalPlayer.Name,
-        TextColor3 = Color3.fromRGB(28, 52, 82), TextSize = 10,
-        Font = Enum.Font.Code, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 222,
-    })
-
-    local statMsgs = {
-        "[ CORE_MODULES.LOAD ............. OK ]",
-        "[ GUI_ENGINE.INJECT ............. OK ]",
-        "[ PLAYER_DATA.LINK .............. OK ]",
-        "[ SECURITY_BYPASS.EXEC .......... OK ]",
-        "[ SYSTEM.READY .................. OK ]",
-    }
 
     task.spawn(function()
-        task.spawn(function()
-            local cols = {Color3.fromRGB(32, 105, 205), Color3.fromRGB(50, 165, 255),
-                         Color3.fromRGB(95, 215, 255), Color3.fromRGB(50, 165, 255)}
-            local ci = 1
-            while Panel.Parent and Boot.Parent do
-                ci = ci % #cols + 1; TW(PanelStroke, {Color = cols[ci]}, 0.45); task.wait(0.5)
-            end
-        end)
+        -- 1) 線が横に伸びる
         task.wait(0.12)
-        TW(Panel, {Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0},
-            0.52, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        TW(Line, {Size = UDim2.fromOffset(320, 2)}, 0.38, Enum.EasingStyle.Quint)
+        task.wait(0.22)
+
+        -- 2) ロゴ・サブが浮き上がりながらフェードイン
+        TW(Logo, {TextTransparency = 0,
+            Position = UDim2.new(0.5, 0, 0.5, -18)}, 0.4, Enum.EasingStyle.Quint)
+        TW(Sub,  {TextTransparency = 0}, 0.4, Enum.EasingStyle.Quint)
+        task.wait(0.72)
+
+        -- 3) 線が820pxの横幅（ウィンドウ幅）まで広がり色が変わる
+        TW(Line, {
+            Size = UDim2.fromOffset(820, 2),
+            BackgroundColor3 = Color3.fromRGB(20, 20, 26),
+        }, 0.42, Enum.EasingStyle.Quint)
+        -- ロゴも同時にフェードアウト
+        TW(Logo, {TextTransparency = 1,
+            Position = UDim2.new(0.5, 0, 0.5, -30)}, 0.35, Enum.EasingStyle.Quint)
+        TW(Sub, {TextTransparency = 1}, 0.3, Enum.EasingStyle.Quint)
+        task.wait(0.44)
+
+        -- 4) 縦に展開してウィンドウの形に
+        TW(Line, {
+            Size = UDim2.fromOffset(820, 520),
+            BackgroundColor3 = Color3.fromRGB(14, 14, 16),
+        }, 0.48, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         task.wait(0.28)
-        TW(TopLine, {Size = UDim2.new(1, 0, 0, 2)}, 0.38, Enum.EasingStyle.Quint)
-        TW(BotLine, {Size = UDim2.new(1, 0, 0, 1)}, 0.38, Enum.EasingStyle.Quint)
-        task.wait(0.18)
-        TW(Logo, {TextTransparency = 0}, 0.38, Enum.EasingStyle.Quint)
-        task.wait(0.12)
-        task.spawn(function()
-            for _ = 1, 5 do
-                task.wait(0.07 + math.random() * 0.18)
-                if not Logo.Parent then break end
-                Logo.Position = UDim2.new(0, math.random(-4, 4), 0, 16)
-                Logo.TextColor3 = Color3.fromRGB(195 + math.random(0, 60), math.random(175, 255), 255)
-                task.wait(0.035)
-                Logo.Position = UDim2.new(0, 0, 0, 16); Logo.TextColor3 = Color3.fromRGB(255, 255, 255)
-            end
-        end)
-        task.spawn(function() TypeWrite(Sub, "ULTIMATE  //  SYSTEM INITIALIZING...", 0.024) end)
-        task.wait(0.08)
-        local prevMi = 0
-        for i = 1, 100 do
-            task.wait(0.012)
-            local p = i / 100; Fill.Size = UDim2.new(p, 0, 1, 0); Glow.Size = UDim2.new(p, 0, 0, 18)
-            PctLbl.Text = i .. "%"
-            local mi = math.ceil(p * #statMsgs)
-            if mi >= 1 and mi <= #statMsgs and mi ~= prevMi then StatusLbl.Text = statMsgs[mi]; prevMi = mi end
-        end
-        for _ = 1, 3 do
-            task.wait(0.055); Fill.BackgroundColor3 = Color3.fromRGB(130, 215, 255)
-            task.wait(0.035); Fill.BackgroundColor3 = Color3.fromRGB(45, 145, 255)
-        end
-        task.wait(0.14)
-        local function FlashFrame(col, alpha, fadeOut)
-            local Fl = Instance.new("Frame"); Fl.Size = UDim2.new(1, 0, 1, 0)
-            Fl.BackgroundColor3 = col; Fl.BackgroundTransparency = 1
-            Fl.BorderSizePixel = 0; Fl.ZIndex = 300; Fl.Parent = Boot
-            TW(Fl, {BackgroundTransparency = alpha}, 0.07); task.wait(0.07)
-            TW(Fl, {BackgroundTransparency = 1}, fadeOut)
-            task.delay(fadeOut, function() pcall(function() Fl:Destroy() end) end)
-        end
-        FlashFrame(Color3.fromRGB(0, 100, 255), 0.50, 0.14);   task.wait(0.11)
-        FlashFrame(Color3.fromRGB(255, 255, 255), 0.32, 0.16); task.wait(0.09)
-        FlashFrame(Color3.fromRGB(100, 210, 255), 0.60, 0.10); task.wait(0.07)
-        TW(Panel, {Position = UDim2.new(0.5, 0, -0.12, 0), BackgroundTransparency = 1},
-            0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-        local Final = Instance.new("Frame"); Final.Size = UDim2.new(1, 0, 1, 0)
-        Final.BackgroundColor3 = Color3.fromRGB(255, 255, 255); Final.BackgroundTransparency = 1
-        Final.BorderSizePixel = 0; Final.ZIndex = 350; Final.Parent = Boot
-        task.wait(0.18); TW(Final, {BackgroundTransparency = 0}, 0.10); task.wait(0.10)
-        TW(Final, {BackgroundTransparency = 1}, 0.28); task.wait(0.30)
-        Boot:Destroy(); if onDone then onDone() end
+
+        -- 5) フラッシュして消える
+        local Flash = Instance.new("Frame")
+        Flash.Size = UDim2.new(1, 0, 1, 0)
+        Flash.BackgroundColor3 = Color3.fromRGB(80, 180, 255)
+        Flash.BackgroundTransparency = 1
+        Flash.BorderSizePixel = 0; Flash.ZIndex = 350; Flash.Parent = Boot
+        TW(Flash, {BackgroundTransparency = 0.65}, 0.07); task.wait(0.07)
+        TW(Flash, {BackgroundTransparency = 1}, 0.22); task.wait(0.12)
+
+        TW(Boot, {BackgroundTransparency = 1}, 0.28, Enum.EasingStyle.Quint)
+        task.wait(0.30)
+        Boot:Destroy()
+        if onDone then onDone() end
     end)
 end
 
@@ -454,6 +433,9 @@ function MyEngine:CreateWindow(Config)
     SG.Parent = LocalPlayer:WaitForChild("PlayerGui")
     table.insert(MyEngine._ScreenGuis, SG)
 
+    -- 粒子をSGの背景として起動（Mainより先に配置してZIndex制御）
+    local _particleBG = StartParticles(SG)
+
     PlayBoot(SG, function()
         AddLog("GUI起動完了", "Success")
         MouseManager.ShowCursor()
@@ -463,7 +445,7 @@ function MyEngine:CreateWindow(Config)
     Main.Name = "Main"; Main.Size = UDim2.new(0, 820, 0, 520)
     Main.AnchorPoint = Vector2.new(0.5, 0.5); Main.Position = UDim2.new(0.5, 0, 0.5, 0)
     Main.BackgroundColor3 = Color3.fromRGB(14, 14, 16); Main.BorderSizePixel = 0
-    Main.BackgroundTransparency = 1; Main.Parent = SG
+    Main.BackgroundTransparency = 1; Main.ZIndex = 3; Main.Parent = SG
     CC(Main, 12); CS(Main, Color3.fromRGB(38, 38, 48), 2)
     local Grad = Instance.new("UIGradient")
     Grad.Color = ColorSequence.new{
@@ -471,7 +453,18 @@ function MyEngine:CreateWindow(Config)
         ColorSequenceKeypoint.new(1, Color3.fromRGB(14, 14, 16)),
     }
     Grad.Rotation = 140; Grad.Parent = Main
-    task.delay(2.7, function() TW(Main, {BackgroundTransparency = 0}, 0.45) end)
+
+    -- ウィンドウ内にも粒子レイヤーを追加
+    local _mainParticles = StartParticles(Main)
+    _mainParticles.ZIndex = 0
+
+    -- Boot終了後、線からウィンドウへ展開するアニメーション
+    task.delay(2.55, function()
+        Main.Size = UDim2.fromOffset(820, 2)
+        Main.BackgroundTransparency = 0
+        TW(Main, {Size = UDim2.fromOffset(820, 520)},
+            0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    end)
     MouseManager.BindFrame(Main)
 
     local Sidebar = Instance.new("Frame")
@@ -558,16 +551,19 @@ function MyEngine:CreateWindow(Config)
         if v then
             busy = true; Main.Visible = true
             MouseManager.ShowCursor()
-            Main.Size = UDim2.new(0, 785, 0, 498); Main.BackgroundTransparency = 1
-            TW(Main, {Size = UDim2.new(0, 820, 0, 520), BackgroundTransparency = 0},
-                0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-            task.delay(0.38, function() busy = false end)
+            -- 線から広がる開くアニメーション
+            Main.Size = UDim2.fromOffset(820, 2)
+            Main.BackgroundTransparency = 0
+            TW(Main, {Size = UDim2.fromOffset(820, 520)},
+                0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            task.delay(0.42, function() busy = false end)
         else
             busy = true
-            local t = TW(Main, {Size = UDim2.new(0, 795, 0, 508), BackgroundTransparency = 1},
-                0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-            t.Completed:Connect(function()
-                Main.Visible = false; Main.Size = UDim2.new(0, 820, 0, 520)
+            -- 閉じるときは線に縮まる
+            TW(Main, {Size = UDim2.fromOffset(820, 2)},
+                0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            task.delay(0.30, function()
+                Main.Visible = false; Main.Size = UDim2.fromOffset(820, 520)
                 MouseManager.StopOverride(); MouseManager.HideCursor(); busy = false
             end)
         end
@@ -576,26 +572,30 @@ function MyEngine:CreateWindow(Config)
     local function Minimize(v)
         if busy then return end; isMin = v; busy = true
         if v then
-            TW(Main, {Size = UDim2.new(0, 50, 0, 50), BackgroundTransparency = 1},
-                0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-            task.delay(0.36, function()
-                Main.Visible = false; Main.Size = UDim2.new(0, 820, 0, 520)
-                Mini.Visible = true; Mini.BackgroundTransparency = 1; Mini.Size = UDim2.new(0, 38, 0, 38)
-                TW(Mini, {BackgroundTransparency = 0, Size = UDim2.new(0, 50, 0, 50)},
+            -- 線に縮まってからミニアイコンへ
+            TW(Main, {Size = UDim2.fromOffset(820, 2)},
+                0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            task.delay(0.30, function()
+                Main.Visible = false; Main.Size = UDim2.fromOffset(820, 520)
+                Mini.Visible = true; Mini.BackgroundTransparency = 1; Mini.Size = UDim2.fromOffset(38, 38)
+                TW(Mini, {BackgroundTransparency = 0, Size = UDim2.fromOffset(50, 50)},
                     0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
                 MouseManager.HideCursor()
                 busy = false
             end)
         else
-            TW(Mini, {BackgroundTransparency = 1, Size = UDim2.new(0, 38, 0, 38)},
+            TW(Mini, {BackgroundTransparency = 1, Size = UDim2.fromOffset(38, 38)},
                 0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
             task.delay(0.2, function()
-                Mini.Visible = false; Mini.Size = UDim2.new(0, 50, 0, 50)
-                Main.Visible = true; Main.Size = UDim2.new(0, 785, 0, 498); Main.BackgroundTransparency = 1
+                Mini.Visible = false; Mini.Size = UDim2.fromOffset(50, 50)
+                Main.Visible = true
+                -- 線から広がって復元
+                Main.Size = UDim2.fromOffset(820, 2)
+                Main.BackgroundTransparency = 0
                 MouseManager.ShowCursor()
-                TW(Main, {Size = UDim2.new(0, 820, 0, 520), BackgroundTransparency = 0},
-                    0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-                task.delay(0.38, function() busy = false end)
+                TW(Main, {Size = UDim2.fromOffset(820, 520)},
+                    0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                task.delay(0.42, function() busy = false end)
             end)
         end
     end
