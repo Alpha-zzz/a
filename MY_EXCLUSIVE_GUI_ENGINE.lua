@@ -433,9 +433,6 @@ function MyEngine:CreateWindow(Config)
     SG.Parent = LocalPlayer:WaitForChild("PlayerGui")
     table.insert(MyEngine._ScreenGuis, SG)
 
-    -- 粒子をSGの背景として起動（Mainより先に配置してZIndex制御）
-    local _particleBG = StartParticles(SG)
-
     PlayBoot(SG, function()
         AddLog("GUI起動完了", "Success")
         MouseManager.ShowCursor()
@@ -445,7 +442,7 @@ function MyEngine:CreateWindow(Config)
     Main.Name = "Main"; Main.Size = UDim2.new(0, 820, 0, 520)
     Main.AnchorPoint = Vector2.new(0.5, 0.5); Main.Position = UDim2.new(0.5, 0, 0.5, 0)
     Main.BackgroundColor3 = Color3.fromRGB(14, 14, 16); Main.BorderSizePixel = 0
-    Main.BackgroundTransparency = 1; Main.ZIndex = 3; Main.Parent = SG
+    Main.BackgroundTransparency = 1; Main.ZIndex = 3; Main.ClipsDescendants = true; Main.Parent = SG
     CC(Main, 12); CS(Main, Color3.fromRGB(38, 38, 48), 2)
     local Grad = Instance.new("UIGradient")
     Grad.Color = ColorSequence.new{
@@ -559,11 +556,12 @@ function MyEngine:CreateWindow(Config)
             task.delay(0.42, function() busy = false end)
         else
             busy = true
-            -- 閉じるときは線に縮まる
-            TW(Main, {Size = UDim2.fromOffset(820, 2)},
+            -- 閉じるときは線に縮まってから即非表示
+            local t = TW(Main, {Size = UDim2.fromOffset(820, 2)},
                 0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-            task.delay(0.30, function()
-                Main.Visible = false; Main.Size = UDim2.fromOffset(820, 520)
+            t.Completed:Connect(function()
+                Main.Visible = false
+                Main.Size = UDim2.fromOffset(820, 520)
                 MouseManager.StopOverride(); MouseManager.HideCursor(); busy = false
             end)
         end
@@ -573,9 +571,9 @@ function MyEngine:CreateWindow(Config)
         if busy then return end; isMin = v; busy = true
         if v then
             -- 線に縮まってからミニアイコンへ
-            TW(Main, {Size = UDim2.fromOffset(820, 2)},
+            local t = TW(Main, {Size = UDim2.fromOffset(820, 2)},
                 0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-            task.delay(0.30, function()
+            t.Completed:Connect(function()
                 Main.Visible = false; Main.Size = UDim2.fromOffset(820, 520)
                 Mini.Visible = true; Mini.BackgroundTransparency = 1; Mini.Size = UDim2.fromOffset(38, 38)
                 TW(Mini, {BackgroundTransparency = 0, Size = UDim2.fromOffset(50, 50)},
@@ -584,9 +582,9 @@ function MyEngine:CreateWindow(Config)
                 busy = false
             end)
         else
-            TW(Mini, {BackgroundTransparency = 1, Size = UDim2.fromOffset(38, 38)},
+            local t = TW(Mini, {BackgroundTransparency = 1, Size = UDim2.fromOffset(38, 38)},
                 0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-            task.delay(0.2, function()
+            t.Completed:Connect(function()
                 Mini.Visible = false; Mini.Size = UDim2.fromOffset(50, 50)
                 Main.Visible = true
                 -- 線から広がって復元
