@@ -274,18 +274,14 @@ end
 --  起動アニメーション V5 — 線からウィンドウへ展開
 -- ================================================================
 local function PlayBoot(sg, onDone)
-    -- 薄い暗幕（完全に黒くしない）
+    -- 起動画面（背景は不透明のまま保つ — 子フレームが透けて外に出るのを防ぐ）
     local Boot = Instance.new("Frame")
     Boot.Size = UDim2.new(1, 0, 1, 0)
     Boot.BackgroundColor3 = Color3.fromRGB(4, 4, 8)
-    Boot.BackgroundTransparency = 0.05
+    Boot.BackgroundTransparency = 0
     Boot.BorderSizePixel = 0
     Boot.ZIndex = 200
     Boot.Parent = sg
-
-    -- 粒子を起動画面でも流す
-    local bootParticles = StartParticles(Boot)
-    bootParticles.ZIndex = 201
 
     -- 中央の「線」フレーム（これがウィンドウに化ける）
     local Line = Instance.new("Frame")
@@ -363,8 +359,15 @@ local function PlayBoot(sg, onDone)
         TW(Flash, {BackgroundTransparency = 0.65}, 0.07); task.wait(0.07)
         TW(Flash, {BackgroundTransparency = 1}, 0.22); task.wait(0.12)
 
-        TW(Boot, {BackgroundTransparency = 1}, 0.28, Enum.EasingStyle.Quint)
-        task.wait(0.30)
+        -- Bootを白いフラッシュで隠してから即Destroy（子フレームが透けて見えるのを防ぐ）
+        local Final = Instance.new("Frame")
+        Final.Size = UDim2.new(1, 0, 1, 0)
+        Final.BackgroundColor3 = Color3.fromRGB(80, 180, 255)
+        Final.BackgroundTransparency = 1
+        Final.BorderSizePixel = 0; Final.ZIndex = 350; Final.Parent = Boot
+        TW(Final, {BackgroundTransparency = 0.6}, 0.08); task.wait(0.08)
+        TW(Final, {BackgroundColor3 = Color3.fromRGB(4, 4, 8), BackgroundTransparency = 0}, 0.18)
+        task.wait(0.20)
         Boot:Destroy()
         if onDone then onDone() end
     end)
@@ -451,16 +454,22 @@ function MyEngine:CreateWindow(Config)
     }
     Grad.Rotation = 140; Grad.Parent = Main
 
-    -- ウィンドウ内にも粒子レイヤーを追加
+    -- ウィンドウ内に粒子レイヤーを追加（Boot中は非表示）
     local _mainParticles = StartParticles(Main)
-    _mainParticles.ZIndex = 0
+    _mainParticles.Visible = false
 
     -- Boot終了後、線からウィンドウへ展開するアニメーション
-    task.delay(2.55, function()
+    task.delay(2.35, function()
+        if not Main.Parent then return end
         Main.Size = UDim2.fromOffset(820, 2)
         Main.BackgroundTransparency = 0
         TW(Main, {Size = UDim2.fromOffset(820, 520)},
             0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        task.delay(0.52, function()
+            if _mainParticles and _mainParticles.Parent then
+                _mainParticles.Visible = true  -- 展開完了後に粒子を表示
+            end
+        end)
     end)
     MouseManager.BindFrame(Main)
 
@@ -547,8 +556,8 @@ function MyEngine:CreateWindow(Config)
         if busy then return end; isOpen = v
         if v then
             busy = true; Main.Visible = true
+            _mainParticles.Visible = true
             MouseManager.ShowCursor()
-            -- 線から広がる開くアニメーション
             Main.Size = UDim2.fromOffset(820, 2)
             Main.BackgroundTransparency = 0
             TW(Main, {Size = UDim2.fromOffset(820, 520)},
@@ -556,7 +565,7 @@ function MyEngine:CreateWindow(Config)
             task.delay(0.42, function() busy = false end)
         else
             busy = true
-            -- 閉じるときは線に縮まってから即非表示
+            _mainParticles.Visible = false  -- 即座に粒子を消す
             local t = TW(Main, {Size = UDim2.fromOffset(820, 2)},
                 0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
             t.Completed:Connect(function()
@@ -570,7 +579,7 @@ function MyEngine:CreateWindow(Config)
     local function Minimize(v)
         if busy then return end; isMin = v; busy = true
         if v then
-            -- 線に縮まってからミニアイコンへ
+            _mainParticles.Visible = false  -- 即座に粒子を消す
             local t = TW(Main, {Size = UDim2.fromOffset(820, 2)},
                 0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
             t.Completed:Connect(function()
@@ -587,7 +596,7 @@ function MyEngine:CreateWindow(Config)
             t.Completed:Connect(function()
                 Mini.Visible = false; Mini.Size = UDim2.fromOffset(50, 50)
                 Main.Visible = true
-                -- 線から広がって復元
+                _mainParticles.Visible = true  -- 粒子を復元
                 Main.Size = UDim2.fromOffset(820, 2)
                 Main.BackgroundTransparency = 0
                 MouseManager.ShowCursor()
