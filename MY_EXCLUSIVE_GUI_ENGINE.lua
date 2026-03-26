@@ -1,5 +1,5 @@
--- af_hub GUI ENGINE - ULTIMATE V5.0
--- Rayfield互換 / 完全日本語 / 一人称視点対応
+-- PROJECT-000 GUI ENGINE - V5.0
+-- Minimalist monochrome interface framework
 -- V4.6 BUGFIX CHANGELOG (最終版):
 --   [FIX] Dropdown/MultiDropdown/ColorPicker 合体バグ完全修正:
 --         旧: OC/CPanel を F の子に置いていた → TC.ClipsDescendants=true で他要素に合体して見えた
@@ -165,8 +165,8 @@ local function StartParticles(parentFrame, knownW, knownH)
     local PARTICLE_COUNT = 30
     local CONNECT_DIST   = 155
     local BASE_SPEED     = 38
-    local DOT_COLOR      = Color3.fromRGB(55, 165, 255)
-    local LINE_COLOR     = Color3.fromRGB(35, 115, 220)
+    local DOT_COLOR      = Color3.fromRGB(200, 200, 200)
+    local LINE_COLOR     = Color3.fromRGB(90, 90, 90)
     local MAX_LINES      = 200
 
     local PBG = Instance.new("Frame")
@@ -285,8 +285,8 @@ local function PlayBoot(sg, onDone)
         Size = UDim2.fromOffset(400, 64),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, 0),
-        Text = "af_hub",
-        TextColor3 = Color3.fromRGB(55, 165, 255),
+        Text = "project-000",
+        TextColor3 = Color3.fromRGB(200, 200, 200),
         TextSize = 52,
         Font = Enum.Font.GothamBold,
         TextTransparency = 1,
@@ -297,8 +297,8 @@ local function PlayBoot(sg, onDone)
         Size = UDim2.fromOffset(340, 18),
         AnchorPoint = Vector2.new(0.5, 0),
         Position = UDim2.new(0.5, 0, 0.5, 38),
-        Text = "ULTIMATE V5.0  //  " .. LocalPlayer.Name,
-        TextColor3 = Color3.fromRGB(40, 110, 200),
+        Text = "INTERFACE  //  " .. LocalPlayer.Name,
+        TextColor3 = Color3.fromRGB(150, 150, 150),
         TextSize = 12,
         Font = Enum.Font.GothamSemibold,
         TextTransparency = 1,
@@ -323,7 +323,7 @@ local function PlayBoot(sg, onDone)
         F.Parent = sg
 
         local H = Instance.new("Frame")
-        H.BackgroundColor3 = Color3.fromRGB(55, 165, 255)
+        H.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
         H.BorderSizePixel = 0; H.ZIndex = 12
         H.Size = UDim2.fromOffset(0, 2)
         H.AnchorPoint = Vector2.new(ax, ay)
@@ -331,7 +331,7 @@ local function PlayBoot(sg, onDone)
         H.Parent = F
 
         local V = Instance.new("Frame")
-        V.BackgroundColor3 = Color3.fromRGB(55, 165, 255)
+        V.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
         V.BorderSizePixel = 0; V.ZIndex = 12
         V.Size = UDim2.fromOffset(2, 0)
         V.AnchorPoint = Vector2.new(ax, ay)
@@ -370,9 +370,9 @@ local function PlayBoot(sg, onDone)
             dot.AnchorPoint = Vector2.new(0.5, 0.5)
             dot.Position = UDim2.new(0.5, 0, 0.5, 0)
             dot.BackgroundColor3 = Color3.fromRGB(
-                40 + math.random(0, 80),
-                130 + math.random(0, 80),
-                210 + math.random(0, 45)
+                180 + math.random(0, 75),
+                180 + math.random(0, 75),
+                180 + math.random(0, 75)
             )
             dot.BackgroundTransparency = 0.05
             dot.BorderSizePixel = 0
@@ -413,7 +413,7 @@ local function PlayBoot(sg, onDone)
         task.wait(0.32)
 
         -- 3) ロゴが光って粒子バースト
-        TW(Logo, {TextColor3 = Color3.fromRGB(145, 220, 255)}, 0.1)
+        TW(Logo, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.1)
         task.wait(0.1)
         BurstParticles()
 
@@ -483,11 +483,11 @@ end
 --  CreateWindow
 -- ================================================================
 function MyEngine:CreateWindow(Config)
-    local WinName = Config.Name or "af_hub"
+    local WinName = Config.Name or "project-000"
     if Config.ToggleKey then MyEngine.ToggleKey = Config.ToggleKey end
 
     local SG = Instance.new("ScreenGui")
-    SG.Name = "afHub_" .. HttpService:GenerateGUID()
+    SG.Name = "proj000_" .. HttpService:GenerateGUID()
     SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     SG.DisplayOrder = 100
     SG.ResetOnSpawn = false
@@ -504,12 +504,12 @@ function MyEngine:CreateWindow(Config)
     Main.Name = "Main"; Main.Size = UDim2.new(0, 820, 0, 520)
     Main.AnchorPoint = Vector2.new(0.5, 0.5); Main.Position = UDim2.new(0.5, 0, 0.5, 0)
     Main.BackgroundColor3 = Color3.fromRGB(14, 14, 16); Main.BorderSizePixel = 0
-    Main.BackgroundTransparency = 1; Main.ZIndex = 3; Main.ClipsDescendants = true; Main.Parent = SG
+    Main.BackgroundTransparency = 1; Main.Visible = false; Main.ZIndex = 3; Main.ClipsDescendants = true; Main.Parent = SG
     CC(Main, 12); CS(Main, Color3.fromRGB(38, 38, 48), 2)
     local Grad = Instance.new("UIGradient")
     Grad.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 20, 24)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(14, 14, 16)),
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(16, 16, 18)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 12)),
     }
     Grad.Rotation = 140; Grad.Parent = Main
 
@@ -520,6 +520,7 @@ function MyEngine:CreateWindow(Config)
     -- Boot終了後、線からウィンドウへ展開するアニメーション
     task.delay(1.85, function()
         if not Main.Parent then return end
+        Main.Visible = true
         Main.Size = UDim2.fromOffset(820, 2)
         Main.BackgroundTransparency = 0
         TW(Main, {Size = UDim2.fromOffset(820, 520)},
@@ -533,7 +534,7 @@ function MyEngine:CreateWindow(Config)
     MouseManager.BindFrame(Main)
 
     local Sidebar = Instance.new("Frame")
-    Sidebar.Size = UDim2.new(0, 210, 1, 0); Sidebar.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+    Sidebar.Size = UDim2.new(0, 210, 1, 0); Sidebar.BackgroundColor3 = Color3.fromRGB(8, 8, 10)
     Sidebar.BorderSizePixel = 0; Sidebar.Parent = Main; CC(Sidebar, 12)
     local SideDiv = Instance.new("Frame")
     SideDiv.Size = UDim2.new(0, 1, 1, 0); SideDiv.Position = UDim2.new(1, 0, 0, 0)
@@ -566,16 +567,16 @@ function MyEngine:CreateWindow(Config)
     local Mini = Instance.new("TextButton")
     Mini.Size = UDim2.new(0, 50, 0, 50); Mini.AnchorPoint = Vector2.new(0, 1)
     Mini.Position = UDim2.new(0, 20, 1, -20); Mini.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
-    Mini.BorderSizePixel = 0; Mini.Text = "◈"; Mini.TextColor3 = Color3.fromRGB(50, 150, 255)
+    Mini.BorderSizePixel = 0; Mini.Text = "◈"; Mini.TextColor3 = Color3.fromRGB(200, 200, 200)
     Mini.TextSize = 22; Mini.Font = Enum.Font.GothamBold
     Mini.AutoButtonColor = false; Mini.Visible = false; Mini.ZIndex = 50; Mini.Parent = SG
-    CC(Mini, 10); CS(Mini, Color3.fromRGB(50, 150, 255), 2)
+    CC(Mini, 10); CS(Mini, Color3.fromRGB(160, 160, 160), 2)
     MakeDraggable(Mini, Mini); MouseManager.BindFrame(Mini)
 
     local TabScroll = Instance.new("ScrollingFrame")
     TabScroll.Size = UDim2.new(1, -10, 1, -190); TabScroll.Position = UDim2.new(0, 5, 0, 58)
     TabScroll.BackgroundTransparency = 1; TabScroll.BorderSizePixel = 0
-    TabScroll.ScrollBarThickness = 2; TabScroll.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+    TabScroll.ScrollBarThickness = 2; TabScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
     TabScroll.Parent = Sidebar
     local TL = Instance.new("UIListLayout")
     TL.Padding = UDim.new(0, 5); TL.SortOrder = Enum.SortOrder.LayoutOrder; TL.Parent = TabScroll
@@ -599,7 +600,7 @@ function MyEngine:CreateWindow(Config)
     MkLabel(AccSec, {
         Size = UDim2.new(1, -72, 0, 18), Position = UDim2.new(0, 66, 0.60, 0),
         Text = "@" .. LocalPlayer.Name, TextSize = 14, Font = Enum.Font.SourceSans,
-        TextColor3 = Color3.fromRGB(65, 125, 195),
+        TextColor3 = Color3.fromRGB(130, 130, 130),
     })
     local ODot = Instance.new("Frame")
     ODot.Size = UDim2.new(0, 8, 0, 8); ODot.Position = UDim2.new(0, 56, 1, -16)
@@ -730,12 +731,12 @@ function MyEngine:CreateWindow(Config)
         DF.ZIndex = 501
         DF.Parent = Overlay
         CC(DF, 10)
-        CS(DF, Color3.fromRGB(58, 68, 110), 1.5)
+        CS(DF, Color3.fromRGB(60, 60, 60), 1.5)
 
         -- Top accent bar
         local TopBar = Instance.new("Frame")
         TopBar.Size = UDim2.new(1, 0, 0, 3)
-        TopBar.BackgroundColor3 = Color3.fromRGB(50, 130, 255)
+        TopBar.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
         TopBar.BorderSizePixel = 0; TopBar.ZIndex = 502; TopBar.Parent = DF
         CC(TopBar, 10)
 
@@ -743,7 +744,7 @@ function MyEngine:CreateWindow(Config)
         MkLabel(DF, {
             Size = UDim2.new(1, -24, 0, 38),
             Position = UDim2.new(0, 14, 0, 8),
-            Text = Data.Title or "確認",
+            Text = Data.Title or "Confirm",
             TextSize = 19,
             Font = Enum.Font.GothamBold,
             TextColor3 = Color3.fromRGB(240, 243, 255),
@@ -785,29 +786,29 @@ function MyEngine:CreateWindow(Config)
 
         for i, btn in ipairs(buttons) do
             local isPrimary = (i == 1)
-            local btnBG = btn.Color or (isPrimary and Color3.fromRGB(42, 105, 225) or Color3.fromRGB(26, 26, 38))
+            local btnBG = btn.Color or (isPrimary and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(30, 30, 36))
             local BF = Instance.new("TextButton")
             BF.Size = UDim2.new(0, btnW, 0, 36)
             BF.Position = UDim2.new(0, 14 + (i - 1) * (btnW + 10), 1, -48)
             BF.BackgroundColor3 = btnBG
             BF.BorderSizePixel = 0
             BF.Text = btn.Title or "OK"
-            BF.TextColor3 = Color3.fromRGB(230, 235, 255)
+            BF.TextColor3 = Color3.fromRGB(20, 20, 24)
             BF.TextSize = 15; BF.Font = Enum.Font.GothamSemibold
             BF.AutoButtonColor = false; BF.ZIndex = 502; BF.Parent = DF
             CC(BF, 7)
             if not isPrimary then CS(BF, Color3.fromRGB(44, 44, 64), 1) end
             BF.MouseEnter:Connect(function()
                 TW(BF, {BackgroundColor3 = isPrimary
-                    and Color3.fromRGB(58, 125, 255)
-                    or  Color3.fromRGB(36, 36, 52)}, 0.1)
+                    and Color3.fromRGB(235, 235, 235)
+                    or  Color3.fromRGB(40, 40, 50)}, 0.1)
             end)
             BF.MouseLeave:Connect(function()
                 TW(BF, {BackgroundColor3 = btnBG}, 0.1)
             end)
             BF.MouseButton1Click:Connect(function()
                 TW(BF, {BackgroundColor3 = isPrimary
-                    and Color3.fromRGB(35, 85, 185)
+                    and Color3.fromRGB(170, 170, 170)
                     or  Color3.fromRGB(22, 22, 32)}, 0.08)
                 CloseDialog()
                 if btn.Callback then task.defer(btn.Callback) end
@@ -839,13 +840,13 @@ function MyEngine:CreateWindow(Config)
 
         local Acc = Instance.new("Frame")
         Acc.Size = UDim2.new(0, 3, 0.55, 0); Acc.Position = UDim2.new(0, 0, 0.225, 0)
-        Acc.BackgroundColor3 = Color3.fromRGB(50, 150, 255)
+        Acc.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
         Acc.BorderSizePixel = 0; Acc.BackgroundTransparency = 1; Acc.Parent = TBtn; CC(Acc, 100)
 
         local TC = Instance.new("ScrollingFrame")
         TC.Name = TabName .. "_C"; TC.Size = UDim2.new(1, 0, 1, 0)
         TC.BackgroundTransparency = 1; TC.BorderSizePixel = 0
-        TC.ScrollBarThickness = 3; TC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
+        TC.ScrollBarThickness = 3; TC.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
         -- [FIX] Y軸のみスクロール（デフォルトXYが干渉するため）
         TC.ScrollingDirection = Enum.ScrollingDirection.Y
         TC.Visible = false; TC.Parent = CA
@@ -902,7 +903,7 @@ function MyEngine:CreateWindow(Config)
                 f.Size = UDim2.new(1, 0, 0, 26); f.BackgroundTransparency = 1; f.Parent = container
                 local lbl = MkLabel(f, {
                     Size = UDim2.new(0.65, 0, 1, 0), Position = UDim2.new(0, 6, 0, 0),
-                    Text = n, TextColor3 = Color3.fromRGB(85, 125, 175), TextSize = 14,
+                    Text = n, TextColor3 = Color3.fromRGB(130, 130, 130), TextSize = 14,
                     Font = Enum.Font.GothamSemibold,
                 })
                 local ln = Instance.new("Frame")
@@ -1068,10 +1069,10 @@ function MyEngine:CreateWindow(Config)
                 local function ApplyVisual(v, animate)
                     if v then
                         if animate then
-                            TW(Trk, {BackgroundColor3 = Color3.fromRGB(42, 138, 242)}, 0.18)
+                            TW(Trk, {BackgroundColor3 = Color3.fromRGB(210, 210, 210)}, 0.18)
                             TW(Cir, {Position = UDim2.new(1, -22, 0.5, -10)}, 0.18)
                         else
-                            Trk.BackgroundColor3 = Color3.fromRGB(42, 138, 242)
+                            Trk.BackgroundColor3 = Color3.fromRGB(210, 210, 210)
                             Cir.Position = UDim2.new(1, -22, 0.5, -10)
                         end
                     else
@@ -1121,7 +1122,7 @@ function MyEngine:CreateWindow(Config)
                 })
                 local VL = MkLabel(F, {
                     Size = UDim2.new(0, 72, 0, 30), Position = UDim2.new(1, -80, 0, 0),
-                    Text = "", TextColor3 = Color3.fromRGB(50, 138, 220), TextSize = 15,
+                    Text = "", TextColor3 = Color3.fromRGB(200, 200, 200), TextSize = 15,
                     Font = Enum.Font.GothamSemibold, TextXAlignment = Enum.TextXAlignment.Right,
                 })
                 local TrkBG = Instance.new("Frame")
@@ -1130,10 +1131,10 @@ function MyEngine:CreateWindow(Config)
                 TrkBG.BorderSizePixel = 0; TrkBG.ZIndex = 2; TrkBG.Parent = F; CC(TrkBG, 100)
                 CS(TrkBG, Color3.fromRGB(40, 40, 52), 1)
                 local Fil = Instance.new("Frame")
-                Fil.Size = UDim2.new(0, 0, 1, 0); Fil.BackgroundColor3 = Color3.fromRGB(50, 138, 220)
+                Fil.Size = UDim2.new(0, 0, 1, 0); Fil.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
                 Fil.BorderSizePixel = 0; Fil.ZIndex = 3; Fil.Parent = TrkBG; CC(Fil, 100)
                 local FilStroke = Instance.new("UIStroke")
-                FilStroke.Color = Color3.fromRGB(58, 163, 255); FilStroke.Thickness = 1.2
+                FilStroke.Color = Color3.fromRGB(230, 230, 230); FilStroke.Thickness = 1.2
                 FilStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; FilStroke.Parent = Fil
                 local Hit = Instance.new("TextButton")
                 Hit.Size = UDim2.new(1, 0, 1, 0); Hit.BackgroundTransparency = 1
@@ -1154,8 +1155,8 @@ function MyEngine:CreateWindow(Config)
                 Hit.InputBegan:Connect(function(i)
                     if i.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
                     dr = true; Upd(Min + (Max - Min) * MouseRatio())
-                    TW(Fil, {BackgroundColor3 = Color3.fromRGB(65, 155, 255)}, 0.1)
-                    TW(FilStroke, {Color = Color3.fromRGB(90, 185, 255)}, 0.1)
+                    TW(Fil, {BackgroundColor3 = Color3.fromRGB(245, 245, 245)}, 0.1)
+                    TW(FilStroke, {Color = Color3.fromRGB(200, 200, 200)}, 0.1)
                 end)
                 -- [FIX] コネクションを保持し、F破棄時に切断してメモリリークを防止
                 local _changedConn = UserInputService.InputChanged:Connect(function(i)
@@ -1166,8 +1167,8 @@ function MyEngine:CreateWindow(Config)
                 local _endedConn = UserInputService.InputEnded:Connect(function(i)
                     if i.UserInputType == Enum.UserInputType.MouseButton1 and dr then
                         dr = false
-                        TW(Fil, {BackgroundColor3 = Color3.fromRGB(50, 138, 220)}, 0.15)
-                        TW(FilStroke, {Color = Color3.fromRGB(58, 163, 255)}, 0.15)
+                        TW(Fil, {BackgroundColor3 = Color3.fromRGB(200, 200, 200)}, 0.15)
+                        TW(FilStroke, {Color = Color3.fromRGB(230, 230, 230)}, 0.15)
                         if Data.Callback then pcall(Data.Callback, cur) end
                         AddLog((Data.Name or "スライダー") .. " = " .. tostring(cur), "Action")
                     end
@@ -1192,7 +1193,7 @@ function MyEngine:CreateWindow(Config)
                 local Min = Data.MinValue or 0
                 local Max = Data.MaxValue or 100
                 local cur = math.clamp(Data.CurrentValue or Min, Min, Max)
-                local barColor = Data.Color or Color3.fromRGB(50, 138, 220)
+                local barColor = Data.Color or Color3.fromRGB(200, 200, 200)
 
                 local F = Instance.new("Frame")
                 F.Size = UDim2.new(1, 0, 0, 54); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
@@ -1408,12 +1409,12 @@ function MyEngine:CreateWindow(Config)
                     optionCount = optionCount + 1
                     local ORow = Instance.new("Frame")
                     ORow.Size = UDim2.new(1, 0, 0, 34); ORow.BorderSizePixel = 0; ORow.ZIndex = 201
-                    ORow.BackgroundColor3 = selected[opt] and Color3.fromRGB(26, 42, 70) or Color3.fromRGB(20, 20, 26)
+                    ORow.BackgroundColor3 = selected[opt] and Color3.fromRGB(35, 35, 40) or Color3.fromRGB(20, 20, 26)
                     ORow.Parent = OC
 
                     local CB = Instance.new("Frame")
                     CB.Size = UDim2.new(0, 16, 0, 16); CB.Position = UDim2.new(0, 10, 0.5, -8)
-                    CB.BackgroundColor3 = selected[opt] and Color3.fromRGB(42, 138, 242) or Color3.fromRGB(32, 32, 44)
+                    CB.BackgroundColor3 = selected[opt] and Color3.fromRGB(210, 210, 210) or Color3.fromRGB(32, 32, 44)
                     CB.BorderSizePixel = 0; CB.ZIndex = 202; CB.Parent = ORow; CC(CB, 4)
 
                     local Check = MkLabel(CB, {
@@ -1450,8 +1451,8 @@ function MyEngine:CreateWindow(Config)
                                 return
                             end
                             selected[opt] = true
-                            TW(ORow, {BackgroundColor3 = Color3.fromRGB(26, 42, 70)}, 0.12)
-                            TW(CB, {BackgroundColor3 = Color3.fromRGB(42, 138, 242)}, 0.12)
+                            TW(ORow, {BackgroundColor3 = Color3.fromRGB(35, 35, 40)}, 0.12)
+                            TW(CB, {BackgroundColor3 = Color3.fromRGB(210, 210, 210)}, 0.12)
                             Check.Text = "✓"
                         end
                         UpdateDisplay()
@@ -1483,8 +1484,8 @@ function MyEngine:CreateWindow(Config)
                     for _, v in pairs(optTable or {}) do selected[v] = true end
                     for opt, btns in pairs(optionBtns) do
                         if selected[opt] then
-                            btns.Frame.BackgroundColor3 = Color3.fromRGB(26, 42, 70)
-                            btns.CB.BackgroundColor3 = Color3.fromRGB(42, 138, 242)
+                            btns.Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+                            btns.CB.BackgroundColor3 = Color3.fromRGB(210, 210, 210)
                             btns.Check.Text = "✓"
                         else
                             btns.Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
@@ -1521,8 +1522,8 @@ function MyEngine:CreateWindow(Config)
                 KB.Size = UDim2.new(0, 102, 0, 28); KB.Position = UDim2.new(1, -110, 0.5, -14)
                 KB.BackgroundColor3 = Color3.fromRGB(26, 26, 36); KB.BorderSizePixel = 0
                 KB.Font = Enum.Font.GothamSemibold; KB.TextSize = 15
-                KB.TextColor3 = Color3.fromRGB(155, 200, 255); KB.AutoButtonColor = false; KB.Parent = F
-                CC(KB, 6); CS(KB, Color3.fromRGB(48, 78, 130), 1)
+                KB.TextColor3 = Color3.fromRGB(200, 200, 200); KB.AutoButtonColor = false; KB.Parent = F
+                CC(KB, 6); CS(KB, Color3.fromRGB(80, 80, 80), 1)
                 local function KeyName(kc)
                     local s = tostring(kc); return s:match("Enum%.KeyCode%.(.+)") or s
                 end
@@ -1558,7 +1559,7 @@ function MyEngine:CreateWindow(Config)
                             if Data.Callback then pcall(Data.Callback, curKey) end
                             MyEngine.Flags[Data.Flag or Data.Name or ""] = curKey
                         end
-                        TW(KB, {BackgroundColor3 = Color3.fromRGB(26, 26, 36), TextColor3 = Color3.fromRGB(155, 200, 255)}, 0.15)
+                        TW(KB, {BackgroundColor3 = Color3.fromRGB(26, 26, 36), TextColor3 = Color3.fromRGB(200, 200, 200)}, 0.15)
                         if listenConn then listenConn:Disconnect(); listenConn = nil end
                     end)
                 end)
@@ -1825,26 +1826,26 @@ function MyEngine:CreateWindow(Config)
                 Outer.BorderSizePixel = 0
                 Outer.ClipsDescendants = true
                 Outer.Parent = container
-                CC(Outer, 8); CS(Outer, Color3.fromRGB(38, 50, 75), 1.5)
+                CC(Outer, 8); CS(Outer, Color3.fromRGB(50, 50, 50), 1.5)
 
                 local HdrGrad = Instance.new("UIGradient")
                 HdrGrad.Color = ColorSequence.new{
-                    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 22, 32)),
-                    ColorSequenceKeypoint.new(1, Color3.fromRGB(13, 13, 17)),
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 18, 22)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 12, 15)),
                 }
                 HdrGrad.Rotation = 90; HdrGrad.Parent = Outer
 
                 local AccLine = Instance.new("Frame")
                 AccLine.Size = UDim2.new(0, 3, 0, 24)
                 AccLine.Position = UDim2.new(0, 0, 0, (HEADER_H - 24) / 2)
-                AccLine.BackgroundColor3 = Color3.fromRGB(50, 130, 255)
+                AccLine.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
                 AccLine.BorderSizePixel = 0; AccLine.Parent = Outer; CC(AccLine, 2)
 
                 local HeaderBtn = Instance.new("TextButton")
                 HeaderBtn.Size = UDim2.new(1, 0, 0, HEADER_H)
                 HeaderBtn.BackgroundTransparency = 1
                 HeaderBtn.Text = "  " .. (sectionName or "セクション")
-                HeaderBtn.TextColor3 = Color3.fromRGB(110, 160, 235)
+                HeaderBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
                 HeaderBtn.TextSize = 15; HeaderBtn.Font = Enum.Font.GothamSemibold
                 HeaderBtn.TextXAlignment = Enum.TextXAlignment.Left
                 HeaderBtn.AutoButtonColor = false; HeaderBtn.ZIndex = 5; HeaderBtn.Parent = Outer
@@ -1888,12 +1889,12 @@ function MyEngine:CreateWindow(Config)
                 end)
 
                 HeaderBtn.MouseEnter:Connect(function()
-                    TW(HeaderBtn, {TextColor3 = Color3.fromRGB(145, 195, 255)}, 0.1)
-                    TW(AccLine, {BackgroundColor3 = Color3.fromRGB(75, 165, 255)}, 0.1)
+                    TW(HeaderBtn, {TextColor3 = Color3.fromRGB(220, 220, 220)}, 0.1)
+                    TW(AccLine, {BackgroundColor3 = Color3.fromRGB(210, 210, 210)}, 0.1)
                 end)
                 HeaderBtn.MouseLeave:Connect(function()
-                    TW(HeaderBtn, {TextColor3 = Color3.fromRGB(110, 160, 235)}, 0.1)
-                    TW(AccLine, {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.1)
+                    TW(HeaderBtn, {TextColor3 = Color3.fromRGB(180, 180, 180)}, 0.1)
+                    TW(AccLine, {BackgroundColor3 = Color3.fromRGB(180, 180, 180)}, 0.1)
                 end)
                 -- [FIX] ホイールイベントを親ScrollingFrameへ転送
                 ForwardScroll(HeaderBtn, scrollTarget)
@@ -1901,16 +1902,16 @@ function MyEngine:CreateWindow(Config)
                     expanded = not expanded
                     if expanded then
                         Arrow.Text = "▼"
-                        TW(AccLine, {BackgroundColor3 = Color3.fromRGB(95, 195, 255)}, 0.15)
+                        TW(AccLine, {BackgroundColor3 = Color3.fromRGB(220, 220, 220)}, 0.15)
                         TW(Outer, {Size = UDim2.new(1, 0, 0, getFullH())},
                             0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-                        CS(Outer, Color3.fromRGB(55, 130, 225), 1.5)
+                        CS(Outer, Color3.fromRGB(130, 130, 130), 1.5)
                     else
                         Arrow.Text = "▶"
-                        TW(AccLine, {BackgroundColor3 = Color3.fromRGB(50, 130, 255)}, 0.15)
+                        TW(AccLine, {BackgroundColor3 = Color3.fromRGB(180, 180, 180)}, 0.15)
                         TW(Outer, {Size = UDim2.new(1, 0, 0, HEADER_H)},
                             0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-                        CS(Outer, Color3.fromRGB(38, 50, 75), 1.5)
+                        CS(Outer, Color3.fromRGB(50, 50, 50), 1.5)
                     end
                 end)
 
@@ -1927,7 +1928,7 @@ function MyEngine:CreateWindow(Config)
 
                 local LOG_COLORS = {
                     Info    = Color3.fromRGB(160, 170, 190),
-                    Action  = Color3.fromRGB(70, 150, 255),
+                    Action  = Color3.fromRGB(160, 160, 160),
                     Success = Color3.fromRGB(65, 210, 100),
                     Warning = Color3.fromRGB(240, 175, 45),
                     Error   = Color3.fromRGB(215, 70, 70),
@@ -1940,14 +1941,14 @@ function MyEngine:CreateWindow(Config)
 
                 MkLabel(F, {
                     Size = UDim2.new(1, -130, 0, 32), Position = UDim2.new(0, 14, 0, 8),
-                    Text = "ログ", TextSize = 18, Font = Enum.Font.SourceSansBold,
+                    Text = "Console", TextSize = 18, Font = Enum.Font.SourceSansBold,
                     TextColor3 = Color3.fromRGB(255, 255, 255),
                 })
 
                 local ClearBtn = Instance.new("TextButton")
                 ClearBtn.Size = UDim2.new(0, 64, 0, 26); ClearBtn.Position = UDim2.new(1, -114, 0, 11)
                 ClearBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 30); ClearBtn.BorderSizePixel = 0
-                ClearBtn.Text = "クリア"; ClearBtn.TextColor3 = Color3.fromRGB(180, 80, 80)
+                ClearBtn.Text = "Clear"; ClearBtn.TextColor3 = Color3.fromRGB(180, 80, 80)
                 ClearBtn.TextSize = 14; ClearBtn.Font = Enum.Font.GothamSemibold
                 ClearBtn.AutoButtonColor = false; ClearBtn.ZIndex = 10; ClearBtn.Parent = F; CC(ClearBtn, 6)
                 CS(ClearBtn, Color3.fromRGB(80, 30, 30), 1)
@@ -2032,8 +2033,8 @@ function MyEngine:CreateWindow(Config)
 
                 local CountLbl = MkLabel(F, {
                     Size = UDim2.new(0, 120, 0, 26), Position = UDim2.new(0.55, -10, 0, 11),
-                    Text = "選択: 0", TextSize = 13, Font = Enum.Font.GothamSemibold,
-                    TextColor3 = Color3.fromRGB(70, 150, 255), TextXAlignment = Enum.TextXAlignment.Right,
+                    Text = "Selected: 0", TextSize = 13, Font = Enum.Font.GothamSemibold,
+                    TextColor3 = Color3.fromRGB(160, 160, 160), TextXAlignment = Enum.TextXAlignment.Right,
                 })
 
                 MakeCollapsible(F, FULL_H, HEADER_H)
@@ -2073,8 +2074,8 @@ function MyEngine:CreateWindow(Config)
                     b.MouseLeave:Connect(function() TW(b, {BackgroundTransparency = 0}, 0.1) end)
                     return b
                 end
-                local SelAllBtn  = MkCtrlBtn("全選択", Color3.fromRGB(28, 52, 95), 0)
-                local DeselAllBtn = MkCtrlBtn("全解除", Color3.fromRGB(38, 24, 24), 0.51)
+                local SelAllBtn  = MkCtrlBtn("全選択", Color3.fromRGB(38, 38, 46), 0)
+                local DeselAllBtn = MkCtrlBtn("Clear All", Color3.fromRGB(35, 30, 30), 0.51)
 
                 local function UpdateCountLbl()
                     local count = 0
@@ -2084,8 +2085,8 @@ function MyEngine:CreateWindow(Config)
 
                 local function ApplyCardVisual(card, stroke, active)
                     if active then
-                        TW(card, {BackgroundColor3 = Color3.fromRGB(22, 42, 76)}, 0.15)
-                        stroke.Color = Color3.fromRGB(50, 130, 255); stroke.Thickness = 1.8
+                        TW(card, {BackgroundColor3 = Color3.fromRGB(32, 32, 38)}, 0.15)
+                        stroke.Color = Color3.fromRGB(180, 180, 180); stroke.Thickness = 1.8
                     else
                         TW(card, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.15)
                         stroke.Color = Color3.fromRGB(36, 36, 46); stroke.Thickness = 1.5
@@ -2096,11 +2097,11 @@ function MyEngine:CreateWindow(Config)
                     local c = Instance.new("Frame")
                     c.Name = "p_" .. plr.UserId
                     c.Size = UDim2.new(1, 0, 0, 48)
-                    c.BackgroundColor3 = selectedTable[plr.Name] and Color3.fromRGB(22, 42, 76) or Color3.fromRGB(20, 20, 26)
+                    c.BackgroundColor3 = selectedTable[plr.Name] and Color3.fromRGB(32, 32, 38) or Color3.fromRGB(20, 20, 26)
                     c.BorderSizePixel = 0; c.Parent = PS
                     CC(c, 7)
                     local s = CS(c,
-                        selectedTable[plr.Name] and Color3.fromRGB(50, 130, 255) or Color3.fromRGB(36, 36, 46),
+                        selectedTable[plr.Name] and Color3.fromRGB(180, 180, 180) or Color3.fromRGB(36, 36, 46),
                         selectedTable[plr.Name] and 1.8 or 1.5)
 
                     local Ico = Instance.new("ImageLabel")
@@ -2117,13 +2118,13 @@ function MyEngine:CreateWindow(Config)
                     MkLabel(c, {
                         Size = UDim2.new(1, -100, 0, 18), Position = UDim2.new(0, 52, 0, 26),
                         Text = "@" .. plr.Name, TextSize = 13, Font = Enum.Font.SourceSans,
-                        TextColor3 = Color3.fromRGB(75, 120, 185),
+                        TextColor3 = Color3.fromRGB(120, 120, 120),
                     })
 
                     -- ✓マーク
                     local ChkF = Instance.new("Frame")
                     ChkF.Size = UDim2.new(0, 22, 0, 22); ChkF.Position = UDim2.new(1, -32, 0.5, -11)
-                    ChkF.BackgroundColor3 = Color3.fromRGB(42, 138, 242); ChkF.BorderSizePixel = 0
+                    ChkF.BackgroundColor3 = Color3.fromRGB(210, 210, 210); ChkF.BorderSizePixel = 0
                     ChkF.BackgroundTransparency = selectedTable[plr.Name] and 0 or 1
                     ChkF.Parent = c; CC(ChkF, 6)
                     local ChkLbl = MkLabel(ChkF, {
@@ -2282,7 +2283,7 @@ function MyEngine:CreateWindow(Config)
 
                 MkLabel(F, {
                     Size = UDim2.new(1, -55, 0, 30), Position = UDim2.new(0, 14, 0, 9),
-                    Text = "サーバー情報", TextSize = 18, Font = Enum.Font.SourceSansBold,
+                    Text = "Server Info", TextSize = 18, Font = Enum.Font.SourceSansBold,
                     TextColor3 = Color3.fromRGB(255, 255, 255),
                 })
 
@@ -2323,9 +2324,9 @@ function MyEngine:CreateWindow(Config)
                     pcall(function()
                         lastPing = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
                     end)
-                    local pc = Color3.fromRGB(65, 210, 100)
-                    if lastPing > 300 then pc = Color3.fromRGB(215, 70, 70)
-                    elseif lastPing > 150 then pc = Color3.fromRGB(240, 175, 45) end
+                    local pc = Color3.fromRGB(200, 200, 200)
+                    if lastPing > 300 then pc = Color3.fromRGB(100, 100, 100)
+                    elseif lastPing > 150 then pc = Color3.fromRGB(140, 140, 140) end
                     vPing.Text = lastPing .. " ms"; vPing.TextColor3 = pc
                     local fps = 0
                     pcall(function()
@@ -2362,9 +2363,9 @@ end
 --  Type: "Info" | "Success" | "Warning" | "Error"  (デフォルト "Info")
 -- ================================================================
 local NOTIFY_TYPE_CONFIG = {
-    Info    = {Color = Color3.fromRGB(45, 145, 255),  Icon = "ℹ"},
-    Success = {Color = Color3.fromRGB(55, 210, 115),  Icon = "✓"},
-    Warning = {Color = Color3.fromRGB(240, 175, 45),  Icon = "⚠"},
+    Info    = {Color = Color3.fromRGB(200, 200, 200),  Icon = "ℹ"},
+    Success = {Color = Color3.fromRGB(220, 220, 220),  Icon = "✓"},
+    Warning = {Color = Color3.fromRGB(180, 180, 180),  Icon = "⚠"},
     Error   = {Color = Color3.fromRGB(215, 70, 70),   Icon = "✕"},
 }
 
@@ -2387,7 +2388,7 @@ function MyEngine:Notify(Data)
     local entry = {}; table.insert(_notifyStack, entry)
 
     local NG = Instance.new("ScreenGui")
-    NG.Name = "afNotify"; NG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    NG.Name = "proj000Notify"; NG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     NG.DisplayOrder = 101
     pcall(function() NG.IgnoreGuiInset = true end)
     NG.Parent = LocalPlayer:WaitForChild("PlayerGui")
@@ -2453,7 +2454,7 @@ end
 --  writefile / readfile が利用できる環境向け
 -- ================================================================
 function MyEngine:SaveConfig(name)
-    local filename = "afHub_" .. (name or "config") .. ".json"
+    local filename = "proj000_" .. (name or "config") .. ".json"
     local data = {}
     for k, v in pairs(self.Flags) do
         local t = type(v)
@@ -2479,7 +2480,7 @@ function MyEngine:SaveConfig(name)
 end
 
 function MyEngine:LoadConfig(name)
-    local filename = "afHub_" .. (name or "config") .. ".json"
+    local filename = "proj000_" .. (name or "config") .. ".json"
     local ok, json = pcall(function()
         return readfile(filename)
     end)
@@ -2515,14 +2516,14 @@ function MyEngine:Destroy()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if pg then
         for _, c in pairs(pg:GetChildren()) do
-            if c.Name == "afNotify" then
+            if c.Name == "proj000Notify" then
                 pcall(function() c:Destroy() end)
             end
         end
     end
     _notifyStack = {}
     AddLog = function() end -- ログ追加を無効化
-    print("[af_hub] GUI を破棄しました")
+    print("[project-000] GUI を破棄しました")
 end
 
 -- ================================================================
@@ -2534,22 +2535,22 @@ end
 
 -- ================================================================
 getgenv().Rayfield = MyEngine
-print("[af_hub] v4.6 起動完了 | トグルキー: " .. tostring(MyEngine.ToggleKey))
-print("[af_hub] ─── V4.0 新機能 ───────────────────────────────────────")
-print("[af_hub] [FIX] CreateLabel :Set()/:Get() が機能しないバグ修正済み")
-print("[af_hub] [FIX] CreateColorPicker S/Vグラデーション更新バグ修正済み")
-print("[af_hub] [FIX] CreateSection/Paragraph/Button 戻り値バグ修正済み")
-print("[af_hub] [NEW] Tab:CreateMultiDropdown({Name,Options,CurrentOptions,MaxSelection,Callback})")
-print("[af_hub] [NEW] Tab:CreateProgressBar({Name,MinValue,MaxValue,CurrentValue,Suffix,Color})")
-print("[af_hub] [NEW] Tab:CreateDivider({Thickness,Color})")
-print("[af_hub] [NEW] Tab:CreateInput() — CreateTextInputのエイリアス")
-print("[af_hub] [NEW] Tab:Select()      — プログラムからタブを切り替える")
-print("[af_hub] [NEW] Window:Dialog({Title,Content,Buttons={{Title,Color,Callback}...}})")
-print("[af_hub] [NEW] Window:Destroy()  — ウィンドウを破棄する")
-print("[af_hub] [NEW] Rayfield:Notify({Title,Content,Duration,Type}) — Type対応")
-print("[af_hub] [NEW] Rayfield:SaveConfig('name') — Flagsを保存 (writefile必要)")
-print("[af_hub] [NEW] Rayfield:LoadConfig('name') — Flagsを読込 (readfile必要)")
-print("[af_hub] [NEW] Rayfield:Log('msg','Type')  — 任意ログ追加")
-print("[af_hub] [NEW] Rayfield:Destroy()          — 全GUI破棄")
-print("[af_hub] ─────────────────────────────────────────────────────────")
+print("[project-000] v5.0 initialized | トグルキー: " .. tostring(MyEngine.ToggleKey))
+print("[project-000] ─── V4.0 新機能 ───────────────────────────────────────")
+print("[project-000] [FIX] CreateLabel :Set()/:Get() が機能しないバグ修正済み")
+print("[project-000] [FIX] CreateColorPicker S/Vグラデーション更新バグ修正済み")
+print("[project-000] [FIX] CreateSection/Paragraph/Button 戻り値バグ修正済み")
+print("[project-000] [NEW] Tab:CreateMultiDropdown({Name,Options,CurrentOptions,MaxSelection,Callback})")
+print("[project-000] [NEW] Tab:CreateProgressBar({Name,MinValue,MaxValue,CurrentValue,Suffix,Color})")
+print("[project-000] [NEW] Tab:CreateDivider({Thickness,Color})")
+print("[project-000] [NEW] Tab:CreateInput() — CreateTextInputのエイリアス")
+print("[project-000] [NEW] Tab:Select()      — プログラムからタブを切り替える")
+print("[project-000] [NEW] Window:Dialog({Title,Content,Buttons={{Title,Color,Callback}...}})")
+print("[project-000] [NEW] Window:Destroy()  — ウィンドウを破棄する")
+print("[project-000] [NEW] Rayfield:Notify({Title,Content,Duration,Type}) — Type対応")
+print("[project-000] [NEW] Rayfield:SaveConfig('name') — Flagsを保存 (writefile必要)")
+print("[project-000] [NEW] Rayfield:LoadConfig('name') — Flagsを読込 (readfile必要)")
+print("[project-000] [NEW] Rayfield:Log('msg','Type')  — 任意ログ追加")
+print("[project-000] [NEW] Rayfield:Destroy()          — 全GUI破棄")
+print("[project-000] ─────────────────────────────────────────────────────────")
 return MyEngine
