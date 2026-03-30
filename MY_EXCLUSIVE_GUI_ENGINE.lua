@@ -274,203 +274,160 @@ local function StartParticles(parentFrame, knownW, knownH)
 end
 
 -- ================================================================
---  起動アニメーション V7 — 暗幕+ど真ん中ロゴ画像・スキャンライン・シネマティック
+--  起動アニメーション V6 — 暗幕なし・文字から粒子バースト・コーナー結晶
 -- ================================================================
 local function PlayBoot(sg, onDone)
+    -- BootフレームなしでSGに直接配置（暗幕ゼロ）
+    local MAIN_W, MAIN_H = 820, 520
 
-    -- ── 暗幕（全画面を黒で覆う）─────────────────────────────────
-    local Overlay = Instance.new("Frame")
-    Overlay.Size = UDim2.new(1, 0, 1, 0)
-    Overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    Overlay.BackgroundTransparency = 0
-    Overlay.BorderSizePixel = 0
-    Overlay.ZIndex = 20
-    Overlay.Parent = sg
-
-    -- ── スキャンライン（横線が上から下へ流れる）─────────────────
-    local Scan = Instance.new("Frame")
-    Scan.Size = UDim2.new(1, 0, 0, 2)
-    Scan.Position = UDim2.new(0, 0, 0, 0)
-    Scan.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Scan.BackgroundTransparency = 0.82
-    Scan.BorderSizePixel = 0
-    Scan.ZIndex = 22
-    Scan.Parent = Overlay
-
-    -- ── ロゴコンテナ（中央固定）─────────────────────────────────
-    local LogoContainer = Instance.new("Frame")
-    LogoContainer.Size = UDim2.fromOffset(300, 300)
-    LogoContainer.AnchorPoint = Vector2.new(0.5, 0.5)
-    LogoContainer.Position = UDim2.new(0.5, 0, 0.5, -20)
-    LogoContainer.BackgroundTransparency = 1
-    LogoContainer.BorderSizePixel = 0
-    LogoContainer.ZIndex = 21
-    LogoContainer.Parent = Overlay
-
-    -- ── ロゴ画像（rbxassetid を差し替えてください）─────────────
-    -- ★ ここに画像をアップロードした際の rbxassetid を入れてください
-    local LOGO_ASSET = "rbxassetid://0"  -- ← 差し替え
-    local LogoImg = Instance.new("ImageLabel")
-    LogoImg.Size = UDim2.fromOffset(260, 260)
-    LogoImg.AnchorPoint = Vector2.new(0.5, 0.5)
-    LogoImg.Position = UDim2.new(0.5, 0, 0.5, 0)
-    LogoImg.BackgroundTransparency = 1
-    LogoImg.Image = LOGO_ASSET
-    LogoImg.ImageTransparency = 1
-    LogoImg.ScaleType = Enum.ScaleType.Fit
-    LogoImg.ZIndex = 22
-    LogoImg.Parent = LogoContainer
-
-    -- 画像がない間はテキストロゴを表示
-    local LogoText = MkLabel(LogoContainer, {
-        Size = UDim2.new(1, 0, 0, 60),
+    -- ── ロゴ ──────────────────────────────────────────────────────
+    local Logo = MkLabel(sg, {
+        Size = UDim2.fromOffset(400, 64),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, 0),
-        Text = "000",
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        TextSize = 80,
+        Text = "project-000",
+        TextColor3 = Color3.fromRGB(200, 200, 200),
+        TextSize = 52,
         Font = Enum.Font.GothamBold,
         TextTransparency = 1,
         TextXAlignment = Enum.TextXAlignment.Center,
-        ZIndex = 22,
+        ZIndex = 12,
     })
-
-    -- ── ロゴ下のライン（横線がロゴ下に広がる）───────────────────
-    local Line = Instance.new("Frame")
-    Line.Size = UDim2.fromOffset(0, 1)
-    Line.AnchorPoint = Vector2.new(0.5, 0)
-    Line.Position = UDim2.new(0.5, 0, 1, 8)
-    Line.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-    Line.BorderSizePixel = 0
-    Line.ZIndex = 22
-    Line.Parent = LogoContainer
-
-    -- ── サブテキスト ─────────────────────────────────────────────
-    local Sub = MkLabel(Overlay, {
-        Size = UDim2.fromOffset(400, 20),
+    local Sub = MkLabel(sg, {
+        Size = UDim2.fromOffset(340, 18),
         AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 160),
-        Text = "000  PROJECT  ///  " .. string.upper(LocalPlayer.Name),
-        TextColor3 = Color3.fromRGB(140, 140, 150),
-        TextSize = 11,
+        Position = UDim2.new(0.5, 0, 0.5, 38),
+        Text = "INTERFACE  //  " .. LocalPlayer.Name,
+        TextColor3 = Color3.fromRGB(150, 150, 150),
+        TextSize = 12,
         Font = Enum.Font.GothamSemibold,
         TextTransparency = 1,
         TextXAlignment = Enum.TextXAlignment.Center,
-        ZIndex = 22,
+        ZIndex = 12,
     })
 
-    -- ── バージョン（右下）────────────────────────────────────────
-    local Ver = MkLabel(Overlay, {
-        Size = UDim2.fromOffset(200, 18),
-        AnchorPoint = Vector2.new(1, 1),
-        Position = UDim2.new(1, -20, 1, -16),
-        Text = "V5.0",
-        TextColor3 = Color3.fromRGB(55, 55, 65),
-        TextSize = 11,
-        Font = Enum.Font.GothamSemibold,
-        TextTransparency = 0,
-        TextXAlignment = Enum.TextXAlignment.Right,
-        ZIndex = 22,
-    })
+    -- ── コーナーブラケット ────────────────────────────────────────
+    local function MakeCorner(ax, ay)
+        local padX = ax == 0 and (0.5 - MAIN_W/2/1920) or (0.5 + MAIN_W/2/1920)
+        -- UDim2.new でウィンドウ四隅に配置
+        local offX = ax == 0 and (-(MAIN_W/2) + 28) or (MAIN_W/2 - 76)
+        local offY = ay == 0 and (-(MAIN_H/2) + 28) or (MAIN_H/2 - 76)
 
-    -- ── コーナーブラケット（4隅）────────────────────────────────
-    local corners = {}
-    local function MakeCorner(px, py, offX, offY)
         local F = Instance.new("Frame")
-        F.Size = UDim2.fromOffset(40, 40)
-        F.AnchorPoint = Vector2.new(px, py)
-        F.Position = UDim2.new(px, offX, py, offY)
+        F.Size = UDim2.fromOffset(48, 48)
+        F.AnchorPoint = Vector2.new(ax, ay)
+        F.Position = UDim2.new(0.5, offX, 0.5, offY)
         F.BackgroundTransparency = 1
         F.BorderSizePixel = 0
-        F.ZIndex = 22
-        F.Parent = Overlay
+        F.ZIndex = 11
+        F.Parent = sg
 
         local H = Instance.new("Frame")
-        H.BackgroundColor3 = Color3.fromRGB(160, 160, 170)
-        H.BorderSizePixel = 0; H.ZIndex = 23
-        H.Size = UDim2.fromOffset(0, 1)
-        H.AnchorPoint = Vector2.new(px, py)
-        H.Position = UDim2.new(px, 0, py, 0)
+        H.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+        H.BorderSizePixel = 0; H.ZIndex = 12
+        H.Size = UDim2.fromOffset(0, 2)
+        H.AnchorPoint = Vector2.new(ax, ay)
+        H.Position = UDim2.new(ax, 0, ay, 0)
         H.Parent = F
 
         local V = Instance.new("Frame")
-        V.BackgroundColor3 = Color3.fromRGB(160, 160, 170)
-        V.BorderSizePixel = 0; V.ZIndex = 23
-        V.Size = UDim2.fromOffset(1, 0)
-        V.AnchorPoint = Vector2.new(px, py)
-        V.Position = UDim2.new(px, 0, py, 0)
+        V.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+        V.BorderSizePixel = 0; V.ZIndex = 12
+        V.Size = UDim2.fromOffset(2, 0)
+        V.AnchorPoint = Vector2.new(ax, ay)
+        V.Position = UDim2.new(ax, 0, ay, 0)
         V.Parent = F
 
-        table.insert(corners, { F = F, H = H, V = V })
-        return F, H, V
+        local function Reveal(delay)
+            task.delay(delay, function()
+                if not F.Parent then return end
+                TW(H, {Size = UDim2.fromOffset(48, 2)}, 0.28, Enum.EasingStyle.Quint)
+                TW(V, {Size = UDim2.fromOffset(2, 48)}, 0.28, Enum.EasingStyle.Quint)
+            end)
+        end
+        local function Destroy()
+            pcall(function() F:Destroy() end)
+        end
+        return Reveal, Destroy
     end
 
-    local _, H1, V1 = MakeCorner(0, 0,  18,  18)
-    local _, H2, V2 = MakeCorner(1, 0, -18,  18)
-    local _, H3, V3 = MakeCorner(0, 1,  18, -18)
-    local _, H4, V4 = MakeCorner(1, 1, -18, -18)
+    local revealTL, destroyTL = MakeCorner(0, 0)
+    local revealTR, destroyTR = MakeCorner(1, 0)
+    local revealBL, destroyBL = MakeCorner(0, 1)
+    local revealBR, destroyBR = MakeCorner(1, 1)
 
-    local function RevealCorners()
-        for _, c in ipairs(corners) do
-            TW(c.H, {Size = UDim2.fromOffset(40, 1)}, 0.35, Enum.EasingStyle.Quint)
-            TW(c.V, {Size = UDim2.fromOffset(1, 40)}, 0.35, Enum.EasingStyle.Quint)
+    -- ── バーストパーティクル ─────────────────────────────────────
+    local bootDots = {}
+    local function BurstParticles()
+        for i = 1, 28 do
+            local ang  = (i / 28) * math.pi * 2 + math.random() * 0.35
+            local dist = 90 + math.random() * 240
+            local sz   = math.random(2, 6)
+            local spd  = 0.5 + math.random() * 0.55
+
+            local dot = Instance.new("Frame")
+            dot.Size = UDim2.fromOffset(sz, sz)
+            dot.AnchorPoint = Vector2.new(0.5, 0.5)
+            dot.Position = UDim2.new(0.5, 0, 0.5, 0)
+            dot.BackgroundColor3 = Color3.fromRGB(
+                180 + math.random(0, 75),
+                180 + math.random(0, 75),
+                180 + math.random(0, 75)
+            )
+            dot.BackgroundTransparency = 0.05
+            dot.BorderSizePixel = 0
+            dot.ZIndex = 11
+            dot.Parent = sg
+            CC(dot, 100)
+            table.insert(bootDots, dot)
+
+            local tx = math.cos(ang) * dist
+            local ty = math.sin(ang) * dist
+            TW(dot, {
+                Position = UDim2.new(0.5, tx, 0.5, ty),
+                BackgroundTransparency = 0.82,
+            }, spd, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+            task.delay(spd * 0.65, function()
+                if not dot.Parent then return end
+                TW(dot, {BackgroundTransparency = 1}, spd * 0.45)
+                task.delay(spd * 0.45, function()
+                    pcall(function() dot:Destroy() end)
+                end)
+            end)
         end
     end
 
     -- ── シーケンス ────────────────────────────────────────────────
     task.spawn(function()
-        -- 0) スキャンライン が上から下へ流れる
-        TW(Scan, {Position = UDim2.new(0, 0, 1, 0)}, 0.55, Enum.EasingStyle.Linear)
-        task.wait(0.4)
-
-        -- 1) コーナー出現
-        RevealCorners()
-        task.wait(0.3)
-
-        -- 2) ロゴ（画像 or テキスト）がスケールアップしながらフェードイン
-        LogoImg.ImageTransparency = 1
-        LogoText.TextTransparency = 1
-        LogoImg.Size = UDim2.fromOffset(220, 220)
-        LogoText.TextSize = 65
-
-        TW(LogoImg, {ImageTransparency = 0, Size = UDim2.fromOffset(260, 260)},
-            0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-        TW(LogoText, {TextTransparency = 0, TextSize = 80},
-            0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-        task.wait(0.3)
-
-        -- 3) ラインが左右に広がる
-        TW(Line, {Size = UDim2.fromOffset(260, 1)}, 0.4, Enum.EasingStyle.Quint)
+        -- 1) ロゴがフェードイン + 少しパルス
+        task.wait(0.12)
+        TW(Logo, {TextTransparency = 0}, 0.4, Enum.EasingStyle.Quint)
+        task.wait(0.1)
+        TW(Logo, {TextSize = 56}, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        task.wait(0.2)
+        TW(Logo, {TextSize = 52}, 0.1, Enum.EasingStyle.Quint)
         task.wait(0.15)
 
-        -- 4) サブテキストがフェードイン（タイプライター風）
-        Sub.TextTransparency = 1
-        TW(Sub, {TextTransparency = 0}, 0.4, Enum.EasingStyle.Quint)
-        task.wait(0.55)
+        -- 2) サブテキスト出現
+        TW(Sub, {TextTransparency = 0}, 0.28, Enum.EasingStyle.Quint)
+        task.wait(0.32)
 
-        -- 5) 軽いパルス
-        TW(LogoImg, {Size = UDim2.fromOffset(270, 270)}, 0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-        TW(LogoText, {TextSize = 84}, 0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-        task.wait(0.14)
-        TW(LogoImg, {Size = UDim2.fromOffset(260, 260)}, 0.1, Enum.EasingStyle.Quint)
-        TW(LogoText, {TextSize = 80}, 0.1, Enum.EasingStyle.Quint)
-        task.wait(0.28)
+        -- 3) ロゴが光って粒子バースト
+        TW(Logo, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.1)
+        task.wait(0.1)
+        BurstParticles()
 
-        -- 6) 全体フェードアウト → 暗幕を消す
-        TW(LogoImg,  {ImageTransparency = 1}, 0.38, Enum.EasingStyle.Quint)
-        TW(LogoText, {TextTransparency = 1},  0.38, Enum.EasingStyle.Quint)
-        TW(Sub,  {TextTransparency = 1}, 0.3, Enum.EasingStyle.Quint)
-        TW(Line, {BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 1)}, 0.32, Enum.EasingStyle.Quint)
-        TW(Ver,  {TextTransparency = 1}, 0.3, Enum.EasingStyle.Quint)
-        for _, c in ipairs(corners) do
-            TW(c.H, {BackgroundTransparency = 1}, 0.28, Enum.EasingStyle.Quint)
-            TW(c.V, {BackgroundTransparency = 1}, 0.28, Enum.EasingStyle.Quint)
-        end
-        task.wait(0.2)
-        TW(Overlay, {BackgroundTransparency = 1}, 0.4, Enum.EasingStyle.Quint)
-        task.wait(0.42)
+        -- 4) ロゴ・サブをフェードアウト、コーナー出現
+        task.wait(0.06)
+        TW(Logo, {TextTransparency = 1, TextSize = 60}, 0.32, Enum.EasingStyle.Quint)
+        TW(Sub,  {TextTransparency = 1}, 0.25, Enum.EasingStyle.Quint)
+        revealTL(0.04); revealTR(0.11); revealBL(0.18); revealBR(0.25)
+        task.wait(0.58)
 
-        pcall(function() Overlay:Destroy() end)
+        -- 5) コーナーをフェードアウトして終了
+        destroyTL(); destroyTR(); destroyBL(); destroyBR()
+        pcall(function() Logo:Destroy() end)
+        pcall(function() Sub:Destroy() end)
         if onDone then onDone() end
     end)
 end
@@ -561,7 +518,7 @@ function MyEngine:CreateWindow(Config)
     _mainParticles.Visible = false
 
     -- Boot終了後、線からウィンドウへ展開するアニメーション
-    task.delay(3.0, function()
+    task.delay(1.85, function()
         if not Main.Parent then return end
         Main.Visible = true
         Main.Size = UDim2.fromOffset(820, 2)
