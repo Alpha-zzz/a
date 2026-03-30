@@ -41,8 +41,8 @@ end
 
 local function CS(p, col, th)
     local s = Instance.new("UIStroke")
-    s.Color = col or Color3.fromRGB(45, 45, 50)
-    s.Thickness = th or 1.5
+    s.Color = col or Color3.fromRGB(28, 28, 32)
+    s.Thickness = th or 1
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     s.Parent = p
     return s
@@ -94,7 +94,7 @@ local function MakeCollapsible(F, fullH, headerH)
     local Btn = Instance.new("TextButton")
     Btn.Size           = UDim2.new(0, 28, 0, 28)
     Btn.Position       = UDim2.new(1, -36, 0, (headerH - 28) / 2)
-    Btn.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    Btn.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
     Btn.BorderSizePixel  = 0
     Btn.Text           = "▲"
     Btn.TextColor3     = Color3.fromRGB(95, 115, 155)
@@ -104,13 +104,13 @@ local function MakeCollapsible(F, fullH, headerH)
     Btn.ZIndex         = 20
     Btn.Parent         = F
     CC(Btn, 6)
-    CS(Btn, Color3.fromRGB(42, 42, 58), 1)
+    CS(Btn, Color3.fromRGB(28, 28, 30), 1)
 
     Btn.MouseEnter:Connect(function()
-        TW(Btn, {BackgroundColor3 = Color3.fromRGB(32, 32, 48)}, 0.1)
+        TW(Btn, {BackgroundColor3 = Color3.fromRGB(18, 18, 20)}, 0.1)
     end)
     Btn.MouseLeave:Connect(function()
-        TW(Btn, {BackgroundColor3 = Color3.fromRGB(22, 22, 32)}, 0.1)
+        TW(Btn, {BackgroundColor3 = Color3.fromRGB(14, 14, 16)}, 0.1)
     end)
 
     F.ClipsDescendants = true
@@ -274,160 +274,288 @@ local function StartParticles(parentFrame, knownW, knownH)
 end
 
 -- ================================================================
---  起動アニメーション V6 — 暗幕なし・文字から粒子バースト・コーナー結晶
+--  起動アニメーション V8 — シネマティック暗幕 + HTTP/Asset両対応ロゴ
 -- ================================================================
+
+-- ★ HTTP URLで画像を読み込む（エクスプロイター環境 Content.fromUri 対応）
+-- 使い方: LOGO_URL に "https://..." を入れるか、LOGO_ASSET に rbxassetid:// を入れる
+local LOGO_URL   = ""                 -- ← HTTPSのURL（例 "https://i.imgur.com/xxxx.png"）
+local LOGO_ASSET = "rbxassetid://0"  -- ← RobloxアセットID（URLが空のときに使用）
+
 local function PlayBoot(sg, onDone)
-    -- BootフレームなしでSGに直接配置（暗幕ゼロ）
-    local MAIN_W, MAIN_H = 820, 520
 
-    -- ── ロゴ ──────────────────────────────────────────────────────
-    local Logo = MkLabel(sg, {
-        Size = UDim2.fromOffset(400, 64),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        Text = "project-000",
-        TextColor3 = Color3.fromRGB(200, 200, 200),
-        TextSize = 52,
-        Font = Enum.Font.GothamBold,
-        TextTransparency = 1,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        ZIndex = 12,
-    })
-    local Sub = MkLabel(sg, {
-        Size = UDim2.fromOffset(340, 18),
-        AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 38),
-        Text = "INTERFACE  //  " .. LocalPlayer.Name,
-        TextColor3 = Color3.fromRGB(150, 150, 150),
-        TextSize = 12,
-        Font = Enum.Font.GothamSemibold,
-        TextTransparency = 1,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        ZIndex = 12,
-    })
+    -- ── 暗幕（全画面）───────────────────────────────────────────
+    local Overlay = Instance.new("Frame")
+    Overlay.Size = UDim2.new(1, 0, 1, 0)
+    Overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    Overlay.BackgroundTransparency = 0
+    Overlay.BorderSizePixel = 0
+    Overlay.ZIndex = 20
+    Overlay.Parent = sg
 
-    -- ── コーナーブラケット ────────────────────────────────────────
-    local function MakeCorner(ax, ay)
-        local padX = ax == 0 and (0.5 - MAIN_W/2/1920) or (0.5 + MAIN_W/2/1920)
-        -- UDim2.new でウィンドウ四隅に配置
-        local offX = ax == 0 and (-(MAIN_W/2) + 28) or (MAIN_W/2 - 76)
-        local offY = ay == 0 and (-(MAIN_H/2) + 28) or (MAIN_H/2 - 76)
+    -- ── 全体の暗いグラデーション（ヴィネット風）──────────────────
+    local Vignette = Instance.new("ImageLabel")
+    Vignette.Size = UDim2.new(1, 0, 1, 0)
+    Vignette.BackgroundTransparency = 1
+    Vignette.Image = "rbxassetid://6014261993"  -- Roblox標準の放射状グラデ
+    Vignette.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    Vignette.ImageTransparency = 0.5
+    Vignette.ZIndex = 21
+    Vignette.Parent = Overlay
 
+    -- ── スキャンライン（細い白線が上から下へ）────────────────────
+    local Scan = Instance.new("Frame")
+    Scan.Size = UDim2.new(1, 0, 0, 1)
+    Scan.Position = UDim2.new(0, 0, -0.01, 0)
+    Scan.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Scan.BackgroundTransparency = 0.7
+    Scan.BorderSizePixel = 0
+    Scan.ZIndex = 24
+    Scan.Parent = Overlay
+
+    -- スキャン後のノイズライン群（水平グリッチ）
+    local function MakeGlitchLine(y, w, alpha)
+        local g = Instance.new("Frame")
+        g.Size = UDim2.new(0, w, 0, 1)
+        g.Position = UDim2.new(0, math.random(0, 200), 0, y)
+        g.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        g.BackgroundTransparency = 1 - alpha
+        g.BorderSizePixel = 0
+        g.ZIndex = 23
+        g.Parent = Overlay
+        return g
+    end
+
+    -- ── 四隅のコーナーブラケット ──────────────────────────────────
+    local corners = {}
+    local function MakeCorner(ax, ay, offX, offY)
         local F = Instance.new("Frame")
-        F.Size = UDim2.fromOffset(48, 48)
+        F.Size = UDim2.fromOffset(50, 50)
         F.AnchorPoint = Vector2.new(ax, ay)
-        F.Position = UDim2.new(0.5, offX, 0.5, offY)
+        F.Position = UDim2.new(ax, offX, ay, offY)
         F.BackgroundTransparency = 1
         F.BorderSizePixel = 0
-        F.ZIndex = 11
-        F.Parent = sg
+        F.ZIndex = 24
+        F.Parent = Overlay
 
         local H = Instance.new("Frame")
-        H.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-        H.BorderSizePixel = 0; H.ZIndex = 12
-        H.Size = UDim2.fromOffset(0, 2)
+        H.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+        H.BorderSizePixel = 0; H.ZIndex = 25
+        H.Size = UDim2.fromOffset(0, 1)
         H.AnchorPoint = Vector2.new(ax, ay)
         H.Position = UDim2.new(ax, 0, ay, 0)
         H.Parent = F
 
         local V = Instance.new("Frame")
-        V.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-        V.BorderSizePixel = 0; V.ZIndex = 12
-        V.Size = UDim2.fromOffset(2, 0)
+        V.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+        V.BorderSizePixel = 0; V.ZIndex = 25
+        V.Size = UDim2.fromOffset(1, 0)
         V.AnchorPoint = Vector2.new(ax, ay)
         V.Position = UDim2.new(ax, 0, ay, 0)
         V.Parent = F
 
-        local function Reveal(delay)
-            task.delay(delay, function()
-                if not F.Parent then return end
-                TW(H, {Size = UDim2.fromOffset(48, 2)}, 0.28, Enum.EasingStyle.Quint)
-                TW(V, {Size = UDim2.fromOffset(2, 48)}, 0.28, Enum.EasingStyle.Quint)
-            end)
-        end
-        local function Destroy()
-            pcall(function() F:Destroy() end)
-        end
-        return Reveal, Destroy
+        table.insert(corners, { H = H, V = V })
+        return H, V
     end
 
-    local revealTL, destroyTL = MakeCorner(0, 0)
-    local revealTR, destroyTR = MakeCorner(1, 0)
-    local revealBL, destroyBL = MakeCorner(0, 1)
-    local revealBR, destroyBR = MakeCorner(1, 1)
+    MakeCorner(0, 0,  22,  22)
+    MakeCorner(1, 0, -22,  22)
+    MakeCorner(0, 1,  22, -22)
+    MakeCorner(1, 1, -22, -22)
 
-    -- ── バーストパーティクル ─────────────────────────────────────
-    local bootDots = {}
-    local function BurstParticles()
-        for i = 1, 28 do
-            local ang  = (i / 28) * math.pi * 2 + math.random() * 0.35
-            local dist = 90 + math.random() * 240
-            local sz   = math.random(2, 6)
-            local spd  = 0.5 + math.random() * 0.55
-
-            local dot = Instance.new("Frame")
-            dot.Size = UDim2.fromOffset(sz, sz)
-            dot.AnchorPoint = Vector2.new(0.5, 0.5)
-            dot.Position = UDim2.new(0.5, 0, 0.5, 0)
-            dot.BackgroundColor3 = Color3.fromRGB(
-                180 + math.random(0, 75),
-                180 + math.random(0, 75),
-                180 + math.random(0, 75)
-            )
-            dot.BackgroundTransparency = 0.05
-            dot.BorderSizePixel = 0
-            dot.ZIndex = 11
-            dot.Parent = sg
-            CC(dot, 100)
-            table.insert(bootDots, dot)
-
-            local tx = math.cos(ang) * dist
-            local ty = math.sin(ang) * dist
-            TW(dot, {
-                Position = UDim2.new(0.5, tx, 0.5, ty),
-                BackgroundTransparency = 0.82,
-            }, spd, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-            task.delay(spd * 0.65, function()
-                if not dot.Parent then return end
-                TW(dot, {BackgroundTransparency = 1}, spd * 0.45)
-                task.delay(spd * 0.45, function()
-                    pcall(function() dot:Destroy() end)
-                end)
-            end)
+    local function RevealCorners(dur)
+        for _, c in ipairs(corners) do
+            TW(c.H, {Size = UDim2.fromOffset(50, 1)}, dur or 0.4, Enum.EasingStyle.Quint)
+            TW(c.V, {Size = UDim2.fromOffset(1, 50)}, dur or 0.4, Enum.EasingStyle.Quint)
+        end
+    end
+    local function HideCorners(dur)
+        for _, c in ipairs(corners) do
+            TW(c.H, {BackgroundTransparency = 1}, dur or 0.3, Enum.EasingStyle.Quint)
+            TW(c.V, {BackgroundTransparency = 1}, dur or 0.3, Enum.EasingStyle.Quint)
         end
     end
 
-    -- ── シーケンス ────────────────────────────────────────────────
+    -- ── ロゴコンテナ（画面中央）──────────────────────────────────
+    local LogoContainer = Instance.new("Frame")
+    LogoContainer.Size = UDim2.fromOffset(320, 320)
+    LogoContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+    LogoContainer.Position = UDim2.new(0.5, 0, 0.5, -10)
+    LogoContainer.BackgroundTransparency = 1
+    LogoContainer.BorderSizePixel = 0
+    LogoContainer.ZIndex = 22
+    LogoContainer.Parent = Overlay
+
+    -- ── ロゴ画像（HTTP URL または AssetID）────────────────────────
+    local LogoImg = Instance.new("ImageLabel")
+    LogoImg.Size = UDim2.fromOffset(220, 220)
+    LogoImg.AnchorPoint = Vector2.new(0.5, 0.5)
+    LogoImg.Position = UDim2.new(0.5, 0, 0.5, 0)
+    LogoImg.BackgroundTransparency = 1
+    LogoImg.ImageTransparency = 1
+    LogoImg.ScaleType = Enum.ScaleType.Fit
+    LogoImg.ZIndex = 23
+    LogoImg.Parent = LogoContainer
+
+    -- HTTP URL → Content.fromUri を試みる
+    if LOGO_URL ~= "" then
+        local ok = pcall(function()
+            -- Content.fromUri はエクスプロイター環境の一部で動作
+            LogoImg.ImageContent = Content.fromUri(LOGO_URL)
+        end)
+        if not ok then
+            -- 失敗した場合は request() で取得してキャッシュ経由で設定
+            pcall(function()
+                local res = request({ Url = LOGO_URL, Method = "GET" })
+                if res and res.StatusCode == 200 then
+                    -- EditableImageへの書き込みはPNGデコーダが必要なため
+                    -- フォールバックとしてURLをImageに設定（一部環境で動作）
+                    LogoImg.Image = LOGO_URL
+                end
+            end)
+        end
+    else
+        LogoImg.Image = LOGO_ASSET
+    end
+
+    -- ── フォールバックテキストロゴ (画像がない / ID=0 のとき表示)
+    local LogoText = Instance.new("TextLabel")
+    LogoText.Size = UDim2.new(1, 0, 0, 72)
+    LogoText.AnchorPoint = Vector2.new(0.5, 0.5)
+    LogoText.Position = UDim2.new(0.5, 0, 0.5, 0)
+    LogoText.BackgroundTransparency = 1
+    LogoText.Text = "000"
+    LogoText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LogoText.TextSize = 82
+    LogoText.Font = Enum.Font.GothamBold
+    LogoText.TextXAlignment = Enum.TextXAlignment.Center
+    LogoText.TextTransparency = 1
+    LogoText.ZIndex = 23
+    LogoText.Parent = LogoContainer
+
+    -- 画像がロードできているか判定（非同期）
+    local logoHasImage = (LOGO_URL ~= "" or LOGO_ASSET ~= "rbxassetid://0")
+
+    -- ── ロゴ下ライン ──────────────────────────────────────────────
+    local Line = Instance.new("Frame")
+    Line.Size = UDim2.fromOffset(0, 1)
+    Line.AnchorPoint = Vector2.new(0.5, 0)
+    Line.Position = UDim2.new(0.5, 0, 1, 12)
+    Line.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    Line.BorderSizePixel = 0
+    Line.ZIndex = 23
+    Line.Parent = LogoContainer
+
+    -- ── 左右ドットアクセント ──────────────────────────────────────
+    local function MakeDot(ax)
+        local d = Instance.new("Frame")
+        d.Size = UDim2.fromOffset(3, 3)
+        d.AnchorPoint = Vector2.new(ax, 0.5)
+        d.Position = UDim2.new(ax, ax == 0 and -8 or 8, 0, 0.5)
+        d.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        d.BackgroundTransparency = 1
+        d.BorderSizePixel = 0
+        d.ZIndex = 23
+        Line.Parent = LogoContainer  -- actually parented to LogoContainer
+        CC(d, 100)
+        d.Parent = LogoContainer
+        return d
+    end
+
+    -- ── サブテキスト ──────────────────────────────────────────────
+    local Sub = Instance.new("TextLabel")
+    Sub.Size = UDim2.fromOffset(420, 18)
+    Sub.AnchorPoint = Vector2.new(0.5, 0)
+    Sub.Position = UDim2.new(0.5, 0, 0.5, 170)
+    Sub.BackgroundTransparency = 1
+    Sub.Text = "000  PROJECT  ///  " .. string.upper(LocalPlayer.Name)
+    Sub.TextColor3 = Color3.fromRGB(120, 120, 130)
+    Sub.TextSize = 11
+    Sub.Font = Enum.Font.GothamSemibold
+    Sub.TextXAlignment = Enum.TextXAlignment.Center
+    Sub.TextTransparency = 1
+    Sub.LetterSpacing = 2
+    Sub.ZIndex = 23
+    Sub.Parent = Overlay
+
+    -- ── バージョン（右下）────────────────────────────────────────
+    local Ver = Instance.new("TextLabel")
+    Ver.Size = UDim2.fromOffset(200, 16)
+    Ver.AnchorPoint = Vector2.new(1, 1)
+    Ver.Position = UDim2.new(1, -20, 1, -16)
+    Ver.BackgroundTransparency = 1
+    Ver.Text = "V5.0"
+    Ver.TextColor3 = Color3.fromRGB(48, 48, 52)
+    Ver.TextSize = 10
+    Ver.Font = Enum.Font.GothamSemibold
+    Ver.TextXAlignment = Enum.TextXAlignment.Right
+    Ver.ZIndex = 23
+    Ver.Parent = Overlay
+
+    -- ── アニメーションシーケンス ─────────────────────────────────
     task.spawn(function()
-        -- 1) ロゴがフェードイン + 少しパルス
-        task.wait(0.12)
-        TW(Logo, {TextTransparency = 0}, 0.4, Enum.EasingStyle.Quint)
-        task.wait(0.1)
-        TW(Logo, {TextSize = 56}, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-        task.wait(0.2)
-        TW(Logo, {TextSize = 52}, 0.1, Enum.EasingStyle.Quint)
-        task.wait(0.15)
 
-        -- 2) サブテキスト出現
-        TW(Sub, {TextTransparency = 0}, 0.28, Enum.EasingStyle.Quint)
+        -- ① スキャンライン が上から下へ流れる
+        TW(Scan, {Position = UDim2.new(0, 0, 1.01, 0)}, 0.6, Enum.EasingStyle.Linear)
+        task.wait(0.45)
+
+        -- グリッチライン数本をランダムに出現→消滅
+        for i = 1, 4 do
+            local gy = math.random(50, 450)
+            local gw = math.random(80, 350)
+            local gl = MakeGlitchLine(gy, gw, 0.3)
+            task.delay(0.06, function()
+                TW(gl, {BackgroundTransparency = 1}, 0.15, Enum.EasingStyle.Linear)
+                task.delay(0.2, function() pcall(function() gl:Destroy() end) end)
+            end)
+            task.wait(0.04)
+        end
+        task.wait(0.1)
+
+        -- ② 四隅コーナー出現
+        RevealCorners(0.38)
         task.wait(0.32)
 
-        -- 3) ロゴが光って粒子バースト
-        TW(Logo, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.1)
-        task.wait(0.1)
-        BurstParticles()
+        -- ③ ロゴがスケールアップしながらフェードイン
+        LogoImg.Size = UDim2.fromOffset(180, 180)
+        LogoText.TextSize = 64
+        LogoImg.ImageTransparency = 1
+        LogoText.TextTransparency = 1
 
-        -- 4) ロゴ・サブをフェードアウト、コーナー出現
-        task.wait(0.06)
-        TW(Logo, {TextTransparency = 1, TextSize = 60}, 0.32, Enum.EasingStyle.Quint)
-        TW(Sub,  {TextTransparency = 1}, 0.25, Enum.EasingStyle.Quint)
-        revealTL(0.04); revealTR(0.11); revealBL(0.18); revealBR(0.25)
-        task.wait(0.58)
+        TW(LogoImg,  {ImageTransparency  = 0, Size = UDim2.fromOffset(240, 240)}, 0.65, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        TW(LogoText, {TextTransparency   = logoHasImage and 1 or 0, TextSize = 82},   0.65, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        task.wait(0.38)
 
-        -- 5) コーナーをフェードアウトして終了
-        destroyTL(); destroyTR(); destroyBL(); destroyBR()
-        pcall(function() Logo:Destroy() end)
-        pcall(function() Sub:Destroy() end)
+        -- ④ ライン が左右に広がる
+        TW(Line, {Size = UDim2.fromOffset(280, 1)}, 0.42, Enum.EasingStyle.Quint)
+        task.wait(0.18)
+
+        -- ⑤ サブテキストがフェードイン
+        TW(Sub, {TextTransparency = 0}, 0.45, Enum.EasingStyle.Quint)
+        task.wait(0.62)
+
+        -- ⑥ パルス（ロゴが一瞬膨らんでもどる）
+        TW(LogoImg,  {Size = UDim2.fromOffset(252, 252)}, 0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        TW(LogoText, {TextSize = 86},                     0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        task.wait(0.16)
+        TW(LogoImg,  {Size = UDim2.fromOffset(240, 240)}, 0.12, Enum.EasingStyle.Quint)
+        TW(LogoText, {TextSize = 82},                     0.12, Enum.EasingStyle.Quint)
+        task.wait(0.32)
+
+        -- ⑦ フェードアウト
+        TW(LogoImg,  {ImageTransparency  = 1},            0.35, Enum.EasingStyle.Quint)
+        TW(LogoText, {TextTransparency   = 1},            0.35, Enum.EasingStyle.Quint)
+        TW(Sub,      {TextTransparency   = 1},            0.28, Enum.EasingStyle.Quint)
+        TW(Line,     {BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 1)}, 0.3, Enum.EasingStyle.Quint)
+        TW(Ver,      {TextTransparency   = 1},            0.28, Enum.EasingStyle.Quint)
+        HideCorners(0.28)
+        task.wait(0.22)
+
+        -- ⑧ 暗幕がフェードアウト → ウィンドウ展開へ
+        TW(Overlay, {BackgroundTransparency = 1}, 0.45, Enum.EasingStyle.Quint)
+        task.wait(0.48)
+
+        pcall(function() Overlay:Destroy() end)
         if onDone then onDone() end
     end)
 end
@@ -503,13 +631,13 @@ function MyEngine:CreateWindow(Config)
     local Main = Instance.new("Frame")
     Main.Name = "Main"; Main.Size = UDim2.new(0, 820, 0, 520)
     Main.AnchorPoint = Vector2.new(0.5, 0.5); Main.Position = UDim2.new(0.5, 0, 0.5, 0)
-    Main.BackgroundColor3 = Color3.fromRGB(14, 14, 16); Main.BorderSizePixel = 0
+    Main.BackgroundColor3 = Color3.fromRGB(8, 8, 9); Main.BorderSizePixel = 0
     Main.BackgroundTransparency = 1; Main.Visible = false; Main.ZIndex = 3; Main.ClipsDescendants = true; Main.Parent = SG
-    CC(Main, 12); CS(Main, Color3.fromRGB(38, 38, 48), 2)
+    CC(Main, 6); CS(Main, Color3.fromRGB(28, 28, 32), 1.5)
     local Grad = Instance.new("UIGradient")
     Grad.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(16, 16, 18)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 12)),
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 11, 13)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(6,  6,  7)),
     }
     Grad.Rotation = 140; Grad.Parent = Main
 
@@ -518,7 +646,8 @@ function MyEngine:CreateWindow(Config)
     _mainParticles.Visible = false
 
     -- Boot終了後、線からウィンドウへ展開するアニメーション
-    task.delay(1.85, function()
+    -- ★ ブート尺に合わせて 3.6s に調整
+    task.delay(3.6, function()
         if not Main.Parent then return end
         Main.Visible = true
         Main.Size = UDim2.fromOffset(820, 2)
@@ -527,42 +656,48 @@ function MyEngine:CreateWindow(Config)
             0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         task.delay(0.52, function()
             if _mainParticles and _mainParticles.Parent then
-                _mainParticles.Visible = true  -- 展開完了後に粒子を表示
+                _mainParticles.Visible = true
             end
         end)
     end)
     MouseManager.BindFrame(Main)
 
     local Sidebar = Instance.new("Frame")
-    Sidebar.Size = UDim2.new(0, 210, 1, 0); Sidebar.BackgroundColor3 = Color3.fromRGB(8, 8, 10)
-    Sidebar.BorderSizePixel = 0; Sidebar.Parent = Main; CC(Sidebar, 12)
+    Sidebar.Size = UDim2.new(0, 210, 1, 0); Sidebar.BackgroundColor3 = Color3.fromRGB(5, 5, 6)
+    Sidebar.BorderSizePixel = 0; Sidebar.Parent = Main; CC(Sidebar, 6)
     local SideDiv = Instance.new("Frame")
     SideDiv.Size = UDim2.new(0, 1, 1, 0); SideDiv.Position = UDim2.new(1, 0, 0, 0)
-    SideDiv.BackgroundColor3 = Color3.fromRGB(30, 30, 38); SideDiv.BorderSizePixel = 0; SideDiv.Parent = Sidebar
+    SideDiv.BackgroundColor3 = Color3.fromRGB(24, 24, 28); SideDiv.BorderSizePixel = 0; SideDiv.Parent = Sidebar
 
     local TitleBar = Instance.new("Frame")
     TitleBar.Size = UDim2.new(1, 0, 0, 54); TitleBar.BackgroundTransparency = 1; TitleBar.Parent = Main
+    -- タイトルバー下ライン
+    local TitleLine = Instance.new("Frame")
+    TitleLine.Size = UDim2.new(1, 0, 0, 1); TitleLine.Position = UDim2.new(0, 0, 1, -1)
+    TitleLine.BackgroundColor3 = Color3.fromRGB(22, 22, 26); TitleLine.BorderSizePixel = 0; TitleLine.Parent = TitleBar
     MakeDraggable(TitleBar, Main)
     MkLabel(TitleBar, {
-        Size = UDim2.new(1, -115, 1, 0), Position = UDim2.new(0, 15, 0, 0),
-        Text = WinName, TextSize = 20, Font = Enum.Font.GothamBold,
-        TextColor3 = Color3.fromRGB(255, 255, 255), ZIndex = 2,
+        Size = UDim2.new(1, -115, 1, 0), Position = UDim2.new(0, 16, 0, 0),
+        Text = WinName, TextSize = 18, Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.fromRGB(230, 230, 235), ZIndex = 2,
     })
 
     local function CtrlBtn(txt, bg, xoff)
         local b = Instance.new("TextButton")
-        b.Size = UDim2.new(0, 30, 0, 30); b.Position = UDim2.new(1, xoff, 0.5, -15)
+        b.Size = UDim2.new(0, 28, 0, 28); b.Position = UDim2.new(1, xoff, 0.5, -14)
         b.BackgroundColor3 = bg; b.BorderSizePixel = 0
-        b.Text = txt; b.TextColor3 = Color3.fromRGB(255, 255, 255)
-        b.TextSize = 15; b.Font = Enum.Font.GothamBold
-        b.AutoButtonColor = false; b.Parent = TitleBar; CC(b, 6); return b
+        b.Text = txt; b.TextColor3 = Color3.fromRGB(200, 200, 205)
+        b.TextSize = 13; b.Font = Enum.Font.GothamBold
+        b.AutoButtonColor = false; b.Parent = TitleBar; CC(b, 4); return b
     end
-    local CloseBtn = CtrlBtn("✕", Color3.fromRGB(170, 48, 48), -10)
-    local MinBtn   = CtrlBtn("—", Color3.fromRGB(26, 26, 32), -46)
-    CloseBtn.MouseEnter:Connect(function() TW(CloseBtn, {BackgroundColor3 = Color3.fromRGB(205, 58, 58)}, 0.1) end)
-    CloseBtn.MouseLeave:Connect(function() TW(CloseBtn, {BackgroundColor3 = Color3.fromRGB(170, 48, 48)}, 0.1) end)
-    MinBtn.MouseEnter:Connect(function()   TW(MinBtn, {BackgroundColor3 = Color3.fromRGB(42, 42, 52)}, 0.1) end)
-    MinBtn.MouseLeave:Connect(function()   TW(MinBtn, {BackgroundColor3 = Color3.fromRGB(26, 26, 32)}, 0.1) end)
+    local CloseBtn = CtrlBtn("✕", Color3.fromRGB(22, 22, 26), -12)
+    local MinBtn   = CtrlBtn("—", Color3.fromRGB(22, 22, 26), -46)
+    CS(CloseBtn, Color3.fromRGB(40, 40, 44), 1)
+    CS(MinBtn,   Color3.fromRGB(40, 40, 44), 1)
+    CloseBtn.MouseEnter:Connect(function() TW(CloseBtn, {BackgroundColor3 = Color3.fromRGB(160, 38, 38)}, 0.12) end)
+    CloseBtn.MouseLeave:Connect(function() TW(CloseBtn, {BackgroundColor3 = Color3.fromRGB(22, 22, 26)}, 0.12) end)
+    MinBtn.MouseEnter:Connect(function()   TW(MinBtn,   {BackgroundColor3 = Color3.fromRGB(32, 32, 36)}, 0.12) end)
+    MinBtn.MouseLeave:Connect(function()   TW(MinBtn,   {BackgroundColor3 = Color3.fromRGB(22, 22, 26)}, 0.12) end)
 
     local Mini = Instance.new("TextButton")
     Mini.Size = UDim2.new(0, 50, 0, 50); Mini.AnchorPoint = Vector2.new(0, 1)
@@ -585,26 +720,27 @@ function MyEngine:CreateWindow(Config)
     end)
 
     local AccSec = Instance.new("Frame")
-    AccSec.Size = UDim2.new(1, -10, 0, 80); AccSec.Position = UDim2.new(0, 5, 1, -85)
-    AccSec.BackgroundColor3 = Color3.fromRGB(15, 15, 18); AccSec.BorderSizePixel = 0; AccSec.Parent = Sidebar
-    CC(AccSec, 8); CS(AccSec, Color3.fromRGB(36, 36, 44), 1)
+    AccSec.Size = UDim2.new(1, -10, 0, 76); AccSec.Position = UDim2.new(0, 5, 1, -82)
+    AccSec.BackgroundColor3 = Color3.fromRGB(10, 10, 11); AccSec.BorderSizePixel = 0; AccSec.Parent = Sidebar
+    CC(AccSec, 4); CS(AccSec, Color3.fromRGB(26, 26, 30), 1)
     local AccIco = Instance.new("ImageLabel")
-    AccIco.Size = UDim2.new(0, 50, 0, 50); AccIco.Position = UDim2.new(0, 10, 0.5, -25)
+    AccIco.Size = UDim2.new(0, 44, 0, 44); AccIco.Position = UDim2.new(0, 10, 0.5, -22)
     AccIco.BackgroundTransparency = 1
     AccIco.Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"
-    AccIco.Parent = AccSec; CC(AccIco, 100)
+    AccIco.Parent = AccSec; CC(AccIco, 4)
     MkLabel(AccSec, {
-        Size = UDim2.new(1, -72, 0, 26), Position = UDim2.new(0, 66, 0.15, 0),
-        Text = LocalPlayer.DisplayName, TextSize = 16, Font = Enum.Font.SourceSansBold,
+        Size = UDim2.new(1, -66, 0, 22), Position = UDim2.new(0, 60, 0.12, 0),
+        Text = LocalPlayer.DisplayName, TextSize = 15, Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.fromRGB(220, 220, 225),
     })
     MkLabel(AccSec, {
-        Size = UDim2.new(1, -72, 0, 18), Position = UDim2.new(0, 66, 0.60, 0),
-        Text = "@" .. LocalPlayer.Name, TextSize = 14, Font = Enum.Font.SourceSans,
-        TextColor3 = Color3.fromRGB(130, 130, 130),
+        Size = UDim2.new(1, -66, 0, 18), Position = UDim2.new(0, 60, 0.60, 0),
+        Text = "@" .. LocalPlayer.Name, TextSize = 13, Font = Enum.Font.Gotham,
+        TextColor3 = Color3.fromRGB(90, 90, 96),
     })
     local ODot = Instance.new("Frame")
-    ODot.Size = UDim2.new(0, 8, 0, 8); ODot.Position = UDim2.new(0, 56, 1, -16)
-    ODot.BackgroundColor3 = Color3.fromRGB(50, 225, 100); ODot.BorderSizePixel = 0; ODot.Parent = AccSec; CC(ODot, 100)
+    ODot.Size = UDim2.new(0, 6, 0, 6); ODot.Position = UDim2.new(0, 50, 1, -14)
+    ODot.BackgroundColor3 = Color3.fromRGB(40, 210, 90); ODot.BorderSizePixel = 0; ODot.Parent = AccSec; CC(ODot, 100)
 
     local CA = Instance.new("Frame")
     CA.Size = UDim2.new(1, -220, 1, -64); CA.Position = UDim2.new(0, 215, 0, 54)
@@ -685,10 +821,10 @@ function MyEngine:CreateWindow(Config)
     -- ================================================================
     local Window = {_Main = Main, _Sidebar = Sidebar, _TabScroll = TabScroll, _CA = CA, _Tabs = {}, _SG = SG}
 
-    local TAB_ACTIVE_BG   = Color3.fromRGB(255, 255, 255)
-    local TAB_ACTIVE_TEXT = Color3.fromRGB(16, 16, 20)
-    local TAB_IDLE_BG     = Color3.fromRGB(17, 17, 20)
-    local TAB_IDLE_TEXT   = Color3.fromRGB(155, 155, 170)
+    local TAB_ACTIVE_BG   = Color3.fromRGB(240, 240, 245)
+    local TAB_ACTIVE_TEXT = Color3.fromRGB(10, 10, 12)
+    local TAB_IDLE_BG     = Color3.fromRGB(10, 10, 11)
+    local TAB_IDLE_TEXT   = Color3.fromRGB(110, 110, 118)
 
     -- ================================================================
     --  Window:Destroy
@@ -726,7 +862,7 @@ function MyEngine:CreateWindow(Config)
         DF.Size = UDim2.new(0, 400, 0, dlgH)
         DF.AnchorPoint = Vector2.new(0.5, 0.5)
         DF.Position = UDim2.new(0.5, 0, 0.5, 0)
-        DF.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+        DF.BackgroundColor3 = Color3.fromRGB(11, 11, 13)
         DF.BorderSizePixel = 0
         DF.ZIndex = 501
         DF.Parent = Overlay
@@ -755,7 +891,7 @@ function MyEngine:CreateWindow(Config)
         local Sep2 = Instance.new("Frame")
         Sep2.Size = UDim2.new(1, -24, 0, 1)
         Sep2.Position = UDim2.new(0, 12, 0, 48)
-        Sep2.BackgroundColor3 = Color3.fromRGB(38, 38, 58)
+        Sep2.BackgroundColor3 = Color3.fromRGB(26, 26, 28)
         Sep2.BorderSizePixel = 0; Sep2.ZIndex = 502; Sep2.Parent = DF
 
         -- Content
@@ -793,11 +929,11 @@ function MyEngine:CreateWindow(Config)
             BF.BackgroundColor3 = btnBG
             BF.BorderSizePixel = 0
             BF.Text = btn.Title or "OK"
-            BF.TextColor3 = Color3.fromRGB(20, 20, 24)
+            BF.TextColor3 = Color3.fromRGB(12, 12, 13)
             BF.TextSize = 15; BF.Font = Enum.Font.GothamSemibold
             BF.AutoButtonColor = false; BF.ZIndex = 502; BF.Parent = DF
             CC(BF, 7)
-            if not isPrimary then CS(BF, Color3.fromRGB(44, 44, 64), 1) end
+            if not isPrimary then CS(BF, Color3.fromRGB(28, 28, 30), 1) end
             BF.MouseEnter:Connect(function()
                 TW(BF, {BackgroundColor3 = isPrimary
                     and Color3.fromRGB(235, 235, 235)
@@ -809,7 +945,7 @@ function MyEngine:CreateWindow(Config)
             BF.MouseButton1Click:Connect(function()
                 TW(BF, {BackgroundColor3 = isPrimary
                     and Color3.fromRGB(170, 170, 170)
-                    or  Color3.fromRGB(22, 22, 32)}, 0.08)
+                    or  Color3.fromRGB(14, 14, 16)}, 0.08)
                 CloseDialog()
                 if btn.Callback then task.defer(btn.Callback) end
             end)
@@ -827,20 +963,20 @@ function MyEngine:CreateWindow(Config)
     -- ================================================================
     function Window:CreateTab(TabName, TabIcon)
         local TBtn = Instance.new("TextButton")
-        TBtn.Size = UDim2.new(1, -8, 0, 44)
+        TBtn.Size = UDim2.new(1, -8, 0, 40)
         TBtn.BackgroundColor3 = TAB_IDLE_BG
         TBtn.BorderSizePixel = 0
-        TBtn.Text = (TabIcon and (TabIcon .. "  ") or "  ") .. TabName
+        TBtn.Text = (TabIcon and (TabIcon .. "  ") or "   ") .. TabName
         TBtn.TextColor3 = TAB_IDLE_TEXT
-        TBtn.TextSize = 17
+        TBtn.TextSize = 15
         TBtn.Font = Enum.Font.GothamSemibold
         TBtn.TextXAlignment = Enum.TextXAlignment.Left
         TBtn.AutoButtonColor = false; TBtn.Parent = TabScroll
-        CC(TBtn, 7)
+        CC(TBtn, 4)
 
         local Acc = Instance.new("Frame")
-        Acc.Size = UDim2.new(0, 3, 0.55, 0); Acc.Position = UDim2.new(0, 0, 0.225, 0)
-        Acc.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+        Acc.Size = UDim2.new(0, 2, 0.52, 0); Acc.Position = UDim2.new(0, 0, 0.24, 0)
+        Acc.BackgroundColor3 = Color3.fromRGB(210, 210, 215)
         Acc.BorderSizePixel = 0; Acc.BackgroundTransparency = 1; Acc.Parent = TBtn; CC(Acc, 100)
 
         local TC = Instance.new("ScrollingFrame")
@@ -977,7 +1113,7 @@ function MyEngine:CreateWindow(Config)
             -- [FIX] 戻り値を返すように修正、:Set() でコンテンツ更新可能
             function Creators:CreateParagraph(Data)
                 local f = Instance.new("Frame")
-                f.Size = UDim2.new(1, 0, 0, 60); f.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+                f.Size = UDim2.new(1, 0, 0, 60); f.BackgroundColor3 = Color3.fromRGB(11, 11, 12)
                 f.BorderSizePixel = 0; f.Parent = container; CC(f, 7); CS(f, Color3.fromRGB(34, 34, 42), 1)
                 local titleLbl = MkLabel(f, {
                     Size = UDim2.new(1, -18, 0, 22), Position = UDim2.new(0, 12, 0, 6),
@@ -1017,7 +1153,7 @@ function MyEngine:CreateWindow(Config)
             -- [FIX] 戻り値を返すように修正
             function Creators:CreateButton(Data)
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
                 local B = Instance.new("TextButton")
                 B.Size = UDim2.new(1, 0, 1, 0); B.BackgroundTransparency = 1
@@ -1025,12 +1161,12 @@ function MyEngine:CreateWindow(Config)
                 B.TextSize = 17; B.Font = Enum.Font.SourceSansSemibold; B.Parent = F
                 B.MouseButton1Click:Connect(function()
                     TW(F, {BackgroundColor3 = Color3.fromRGB(30, 30, 38)}, 0.08)
-                    task.delay(0.08, function() TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.12) end)
+                    task.delay(0.08, function() TW(F, {BackgroundColor3 = Color3.fromRGB(12, 12, 13)}, 0.12) end)
                     if Data.Callback then pcall(Data.Callback) end
                     AddLog("実行: " .. (Data.Name or "?"), "Action")
                 end)
                 B.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(26, 26, 32)}, 0.08) end)
-                B.MouseLeave:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.08) end)
+                B.MouseLeave:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(12, 12, 13)}, 0.08) end)
                 -- [FIX] ホイールイベントを親ScrollingFrameへ転送
                 ForwardScroll(B, scrollTarget)
                 local Elem = {}
@@ -1047,7 +1183,7 @@ function MyEngine:CreateWindow(Config)
             -- ── トグル ────────────────────────────────────────────
             function Creators:CreateToggle(Data)
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
                 MkLabel(F, {
                     Size = UDim2.new(1, -72, 1, 0), Position = UDim2.new(0, 14, 0, 0),
@@ -1087,7 +1223,7 @@ function MyEngine:CreateWindow(Config)
                 end
                 ApplyVisual(val, false)
                 HitBtn.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(26, 26, 32)}, 0.08) end)
-                HitBtn.MouseLeave:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.08) end)
+                HitBtn.MouseLeave:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(12, 12, 13)}, 0.08) end)
                 -- [FIX] ホイールイベントを親ScrollingFrameへ転送
                 ForwardScroll(HitBtn, scrollTarget)
                 HitBtn.MouseButton1Click:Connect(function()
@@ -1113,7 +1249,7 @@ function MyEngine:CreateWindow(Config)
                 local cur = math.clamp(Data.CurrentValue or Min, Min, Max)
                 local dr = false
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 54); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 54); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
                 MkLabel(F, {
                     Size = UDim2.new(1, -90, 0, 30), Position = UDim2.new(0, 14, 0, 0),
@@ -1178,7 +1314,7 @@ function MyEngine:CreateWindow(Config)
                 end)
                 Hit.MouseEnter:Connect(function() TW(F, {BackgroundColor3 = Color3.fromRGB(25, 25, 30)}, 0.1) end)
                 Hit.MouseLeave:Connect(function()
-                    if not dr then TW(F, {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}, 0.1) end
+                    if not dr then TW(F, {BackgroundColor3 = Color3.fromRGB(12, 12, 13)}, 0.1) end
                 end)
                 -- [FIX] ホイールイベントを親ScrollingFrameへ転送
                 ForwardScroll(Hit, scrollTarget)
@@ -1196,7 +1332,7 @@ function MyEngine:CreateWindow(Config)
                 local barColor = Data.Color or Color3.fromRGB(200, 200, 200)
 
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 54); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 54); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
                 MkLabel(F, {
                     Size = UDim2.new(1, -90, 0, 30), Position = UDim2.new(0, 14, 0, 0),
@@ -1246,7 +1382,7 @@ function MyEngine:CreateWindow(Config)
             -- ── ドロップダウン ────────────────────────────────────
             function Creators:CreateDropdown(Data)
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
 
                 local DB = Instance.new("TextButton")
@@ -1267,7 +1403,7 @@ function MyEngine:CreateWindow(Config)
                 -- ★ 開くときに F の AbsolutePosition から相対座標を計算して配置
                 local OC = Instance.new("ScrollingFrame")
                 OC.Size = UDim2.new(0, 0, 0, 0)
-                OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
+                OC.BackgroundColor3 = Color3.fromRGB(9, 9, 10); OC.BorderSizePixel = 0
                 OC.ScrollBarThickness = 3; OC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
                 OC.ScrollingDirection = Enum.ScrollingDirection.Y
                 OC.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -1308,13 +1444,13 @@ function MyEngine:CreateWindow(Config)
                 local function AddOption(opt)
                     optionCount = optionCount + 1
                     local OB = Instance.new("TextButton")
-                    OB.Size = UDim2.new(1, 0, 0, 34); OB.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+                    OB.Size = UDim2.new(1, 0, 0, 34); OB.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
                     OB.BorderSizePixel = 0; OB.Text = "  " .. opt
                     OB.TextColor3 = Color3.fromRGB(195, 200, 215); OB.TextSize = 16
                     OB.Font = Enum.Font.SourceSans; OB.TextXAlignment = Enum.TextXAlignment.Left
                     OB.AutoButtonColor = false; OB.ZIndex = 201; OB.Parent = OC
                     OB.MouseEnter:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(28, 28, 36)}, 0.08) end)
-                    OB.MouseLeave:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end)
+                    OB.MouseLeave:Connect(function() TW(OB, {BackgroundColor3 = Color3.fromRGB(14, 14, 16)}, 0.08) end)
                     ForwardScroll(OB, OC)
                     OB.MouseButton1Click:Connect(function()
                         DB.Text = "  " .. (Data.Name or "選択") .. ":  " .. opt
@@ -1352,7 +1488,7 @@ function MyEngine:CreateWindow(Config)
                 local maxSel = Data.MaxSelection or math.huge
 
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
 
                 local function getSelectedText()
@@ -1379,7 +1515,7 @@ function MyEngine:CreateWindow(Config)
                 -- ★ OC を CA 直下に配置 (TC の ClipsDescendants を完全回避)
                 local OC = Instance.new("ScrollingFrame")
                 OC.Size = UDim2.new(0, 0, 0, 0)
-                OC.BackgroundColor3 = Color3.fromRGB(16, 16, 20); OC.BorderSizePixel = 0
+                OC.BackgroundColor3 = Color3.fromRGB(9, 9, 10); OC.BorderSizePixel = 0
                 OC.ScrollBarThickness = 3; OC.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 65)
                 OC.ScrollingDirection = Enum.ScrollingDirection.Y
                 OC.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -1409,7 +1545,7 @@ function MyEngine:CreateWindow(Config)
                     optionCount = optionCount + 1
                     local ORow = Instance.new("Frame")
                     ORow.Size = UDim2.new(1, 0, 0, 34); ORow.BorderSizePixel = 0; ORow.ZIndex = 201
-                    ORow.BackgroundColor3 = selected[opt] and Color3.fromRGB(35, 35, 40) or Color3.fromRGB(20, 20, 26)
+                    ORow.BackgroundColor3 = selected[opt] and Color3.fromRGB(35, 35, 40) or Color3.fromRGB(14, 14, 16)
                     ORow.Parent = OC
 
                     local CB = Instance.new("Frame")
@@ -1434,20 +1570,20 @@ function MyEngine:CreateWindow(Config)
                         if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(26, 26, 34)}, 0.08) end
                     end)
                     OBBtn.MouseLeave:Connect(function()
-                        if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.08) end
+                        if not selected[opt] then TW(ORow, {BackgroundColor3 = Color3.fromRGB(14, 14, 16)}, 0.08) end
                     end)
                     ForwardScroll(OBBtn, OC)
                     OBBtn.MouseButton1Click:Connect(function()
                         if selected[opt] then
                             selected[opt] = nil
-                            TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.12)
+                            TW(ORow, {BackgroundColor3 = Color3.fromRGB(14, 14, 16)}, 0.12)
                             TW(CB, {BackgroundColor3 = Color3.fromRGB(32, 32, 44)}, 0.12)
                             Check.Text = ""
                         else
                             local count = 0; for _ in pairs(selected) do count = count + 1 end
                             if count >= maxSel then
                                 TW(ORow, {BackgroundColor3 = Color3.fromRGB(60, 25, 25)}, 0.08)
-                                task.delay(0.2, function() TW(ORow, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.15) end)
+                                task.delay(0.2, function() TW(ORow, {BackgroundColor3 = Color3.fromRGB(14, 14, 16)}, 0.15) end)
                                 return
                             end
                             selected[opt] = true
@@ -1488,7 +1624,7 @@ function MyEngine:CreateWindow(Config)
                             btns.CB.BackgroundColor3 = Color3.fromRGB(210, 210, 210)
                             btns.Check.Text = "✓"
                         else
-                            btns.Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+                            btns.Frame.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
                             btns.CB.BackgroundColor3 = Color3.fromRGB(32, 32, 44)
                             btns.Check.Text = ""
                         end
@@ -1512,7 +1648,7 @@ function MyEngine:CreateWindow(Config)
             -- ── キーバインド設定 ──────────────────────────────────
             function Creators:CreateKeybind(Data)
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
                 MkLabel(F, {
                     Size = UDim2.new(1, -118, 1, 0), Position = UDim2.new(0, 14, 0, 0),
@@ -1534,7 +1670,7 @@ function MyEngine:CreateWindow(Config)
                 KB.MouseButton1Click:Connect(function()
                     if listening then return end
                     listening = true; blinking = true
-                    TW(KB, {BackgroundColor3 = Color3.fromRGB(16, 16, 26)}, 0.1)
+                    TW(KB, {BackgroundColor3 = Color3.fromRGB(10, 10, 14)}, 0.1)
                     TW(KB, {TextColor3 = Color3.fromRGB(255, 220, 55)}, 0.1)
                     KB.Text = "[ ??? ]"
                     task.spawn(function()
@@ -1585,7 +1721,7 @@ function MyEngine:CreateWindow(Config)
             -- ── テキスト入力 ──────────────────────────────────────
             function Creators:CreateTextInput(Data)
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 70); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 70); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
                 MkLabel(F, {
                     Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 14, 0, 6),
@@ -1601,7 +1737,7 @@ function MyEngine:CreateWindow(Config)
                 TB.TextColor3 = Color3.fromRGB(220, 225, 240); TB.TextSize = 16
                 TB.Font = Enum.Font.SourceSans; TB.ClearTextOnFocus = false; TB.Parent = F; CC(TB, 6)
                 CS(TB, Color3.fromRGB(34, 34, 52), 1)
-                TB.Focused:Connect(function() TW(TB, {BackgroundColor3 = Color3.fromRGB(16, 16, 26)}, 0.1) end)
+                TB.Focused:Connect(function() TW(TB, {BackgroundColor3 = Color3.fromRGB(10, 10, 14)}, 0.1) end)
                 TB.FocusLost:Connect(function(enter)
                     TW(TB, {BackgroundColor3 = Color3.fromRGB(13, 13, 18)}, 0.1)
                     if Data.Callback then pcall(Data.Callback, TB.Text, enter) end
@@ -1626,7 +1762,7 @@ function MyEngine:CreateWindow(Config)
                 local H, S, V = initCol:ToHSV()
                 local opened = false
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+                F.Size = UDim2.new(1, 0, 0, 44); F.BackgroundColor3 = Color3.fromRGB(12, 12, 13)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 7); CS(F, Color3.fromRGB(34, 34, 42), 1)
                 MkLabel(F, {
                     Size = UDim2.new(1, -80, 1, 0), Position = UDim2.new(0, 14, 0, 0),
@@ -1643,7 +1779,7 @@ function MyEngine:CreateWindow(Config)
                 })
                 local TogBtn = Instance.new("TextButton")
                 TogBtn.Size = UDim2.new(0, 22, 0, 22); TogBtn.Position = UDim2.new(1, -36, 0.5, -11)
-                TogBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 38); TogBtn.BorderSizePixel = 0
+                TogBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 20); TogBtn.BorderSizePixel = 0
                 TogBtn.Text = "▾"; TogBtn.TextColor3 = Color3.fromRGB(155, 160, 185)
                 TogBtn.TextSize = 14; TogBtn.Font = Enum.Font.GothamBold
                 TogBtn.AutoButtonColor = false; TogBtn.Parent = F; CC(TogBtn, 6)
@@ -1830,7 +1966,7 @@ function MyEngine:CreateWindow(Config)
 
                 local HdrGrad = Instance.new("UIGradient")
                 HdrGrad.Color = ColorSequence.new{
-                    ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 18, 22)),
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 11, 12)),
                     ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 12, 15)),
                 }
                 HdrGrad.Rotation = 90; HdrGrad.Parent = Outer
@@ -1936,7 +2072,7 @@ function MyEngine:CreateWindow(Config)
                 local LOG_BADGES = {Info = "INFO", Action = "ACT", Success = "OK", Warning = "WARN", Error = "ERR"}
 
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(9, 9, 10)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 8); CS(F, Color3.fromRGB(34, 34, 42), 1)
 
                 MkLabel(F, {
@@ -1959,7 +2095,7 @@ function MyEngine:CreateWindow(Config)
 
                 local Sep = Instance.new("Frame")
                 Sep.Size = UDim2.new(1, -24, 0, 1); Sep.Position = UDim2.new(0, 12, 0, 42)
-                Sep.BackgroundColor3 = Color3.fromRGB(28, 28, 38); Sep.BorderSizePixel = 0; Sep.Parent = F
+                Sep.BackgroundColor3 = Color3.fromRGB(18, 18, 20); Sep.BorderSizePixel = 0; Sep.Parent = F
 
                 local SF = Instance.new("ScrollingFrame")
                 SF.Size = UDim2.new(1, -12, 0, 302); SF.Position = UDim2.new(0, 6, 0, 48)
@@ -2022,7 +2158,7 @@ function MyEngine:CreateWindow(Config)
                 local selectedTable = {}
 
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(9, 9, 10)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 8); CS(F, Color3.fromRGB(34, 34, 42), 1)
 
                 MkLabel(F, {
@@ -2041,7 +2177,7 @@ function MyEngine:CreateWindow(Config)
 
                 local Sep = Instance.new("Frame")
                 Sep.Size = UDim2.new(1, -24, 0, 1); Sep.Position = UDim2.new(0, 12, 0, 42)
-                Sep.BackgroundColor3 = Color3.fromRGB(28, 28, 38); Sep.BorderSizePixel = 0; Sep.Parent = F
+                Sep.BackgroundColor3 = Color3.fromRGB(18, 18, 20); Sep.BorderSizePixel = 0; Sep.Parent = F
 
                 local PS = Instance.new("ScrollingFrame")
                 PS.Size = UDim2.new(1, -12, 0, 286); PS.Position = UDim2.new(0, 6, 0, 50)
@@ -2088,7 +2224,7 @@ function MyEngine:CreateWindow(Config)
                         TW(card, {BackgroundColor3 = Color3.fromRGB(32, 32, 38)}, 0.15)
                         stroke.Color = Color3.fromRGB(180, 180, 180); stroke.Thickness = 1.8
                     else
-                        TW(card, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.15)
+                        TW(card, {BackgroundColor3 = Color3.fromRGB(14, 14, 16)}, 0.15)
                         stroke.Color = Color3.fromRGB(36, 36, 46); stroke.Thickness = 1.5
                     end
                 end
@@ -2097,7 +2233,7 @@ function MyEngine:CreateWindow(Config)
                     local c = Instance.new("Frame")
                     c.Name = "p_" .. plr.UserId
                     c.Size = UDim2.new(1, 0, 0, 48)
-                    c.BackgroundColor3 = selectedTable[plr.Name] and Color3.fromRGB(32, 32, 38) or Color3.fromRGB(20, 20, 26)
+                    c.BackgroundColor3 = selectedTable[plr.Name] and Color3.fromRGB(32, 32, 38) or Color3.fromRGB(14, 14, 16)
                     c.BorderSizePixel = 0; c.Parent = PS
                     CC(c, 7)
                     local s = CS(c,
@@ -2162,7 +2298,7 @@ function MyEngine:CreateWindow(Config)
                         if not selectedTable[plr.Name] then TW(c, {BackgroundColor3 = Color3.fromRGB(24, 24, 32)}, 0.1) end
                     end)
                     hitBtn.MouseLeave:Connect(function()
-                        if not selectedTable[plr.Name] then TW(c, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.1) end
+                        if not selectedTable[plr.Name] then TW(c, {BackgroundColor3 = Color3.fromRGB(14, 14, 16)}, 0.1) end
                     end)
                     -- [FIX] ホイールイベントを親ScrollingFrameへ転送
                     ForwardScroll(hitBtn, scrollTarget)
@@ -2203,7 +2339,7 @@ function MyEngine:CreateWindow(Config)
                             if s then
                                 s.Color = Color3.fromRGB(36, 36, 46); s.Thickness = 1.5
                             end
-                            TW(c, {BackgroundColor3 = Color3.fromRGB(20, 20, 26)}, 0.15)
+                            TW(c, {BackgroundColor3 = Color3.fromRGB(14, 14, 16)}, 0.15)
                             for _, lbl in pairs(c:GetDescendants()) do
                                 if lbl:IsA("TextLabel") and lbl.Text == "✓" then
                                     TW(lbl, {TextTransparency = 1}, 0.15)
@@ -2278,7 +2414,7 @@ function MyEngine:CreateWindow(Config)
                 local HEADER_H = 48
 
                 local F = Instance.new("Frame")
-                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+                F.Size = UDim2.new(1, 0, 0, FULL_H); F.BackgroundColor3 = Color3.fromRGB(9, 9, 10)
                 F.BorderSizePixel = 0; F.Parent = container; CC(F, 8); CS(F, Color3.fromRGB(34, 34, 42), 1)
 
                 MkLabel(F, {
@@ -2291,7 +2427,7 @@ function MyEngine:CreateWindow(Config)
 
                 local Sep = Instance.new("Frame")
                 Sep.Size = UDim2.new(1, -24, 0, 1); Sep.Position = UDim2.new(0, 12, 0, 40)
-                Sep.BackgroundColor3 = Color3.fromRGB(28, 28, 38); Sep.BorderSizePixel = 0; Sep.Parent = F
+                Sep.BackgroundColor3 = Color3.fromRGB(18, 18, 20); Sep.BorderSizePixel = 0; Sep.Parent = F
 
                 local function Row(lbl, y)
                     MkLabel(F, {Size = UDim2.new(0.42, -4, 0, 26), Position = UDim2.new(0, 16, 0, y),
@@ -2397,7 +2533,7 @@ function MyEngine:Notify(Data)
     NF.Size = UDim2.new(0, 318, 0, 84)
     NF.Position = UDim2.new(1, 10, 1, yOff)
     NF.AnchorPoint = Vector2.new(1, 1)
-    NF.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+    NF.BackgroundColor3 = Color3.fromRGB(9, 9, 10)
     NF.BorderSizePixel = 0; NF.Parent = NG
     CC(NF, 10); CS(NF, accentColor, 1.5)
 
@@ -2427,7 +2563,7 @@ function MyEngine:Notify(Data)
     -- 底辺プログレスバー
     local ProgBG = Instance.new("Frame")
     ProgBG.Size = UDim2.new(1, -16, 0, 2); ProgBG.Position = UDim2.new(0, 8, 1, -5)
-    ProgBG.BackgroundColor3 = Color3.fromRGB(28, 28, 38); ProgBG.BorderSizePixel = 0; ProgBG.Parent = NF; CC(ProgBG, 100)
+    ProgBG.BackgroundColor3 = Color3.fromRGB(18, 18, 20); ProgBG.BorderSizePixel = 0; ProgBG.Parent = NF; CC(ProgBG, 100)
     local ProgFil = Instance.new("Frame")
     ProgFil.Size = UDim2.new(1, 0, 1, 0); ProgFil.BackgroundColor3 = accentColor
     ProgFil.BorderSizePixel = 0; ProgFil.Parent = ProgBG; CC(ProgFil, 100)
